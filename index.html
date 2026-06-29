@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open Music Player</title>
+    <meta
+      name="description"
+      content="Player musicale gratuito con Audius, brani completi, testi, coda e preferiti locali."
+    >
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Barra principale">
+        <div class="brand" aria-label="Open Music Player">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Open Music</span>
+        </div>
+
+        <form class="search" id="searchForm">
+          <label class="sr-only" for="searchInput">Cerca musica</label>
+          <input
+            id="searchInput"
+            name="query"
+            type="search"
+            autocomplete="off"
+            placeholder="Brano, artista, genere o mood"
+            required
+          >
+          <button class="icon-button primary" type="submit" aria-label="Cerca">
+            <span aria-hidden="true">&#128269;</span>
+          </button>
+        </form>
+      </header>
+
+      <main class="workspace">
+        <section class="results-pane" aria-labelledby="resultsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YouTube / Audius</p>
+              <h1 id="resultsTitle">Ascolta</h1>
+            </div>
+            <div class="status-pill" id="resultCount">Pronto</div>
+          </div>
+
+          <div class="quick-searches" aria-label="Ricerche rapide">
+            <button type="button" data-query="Fabri Fibra">Fabri Fibra</button>
+            <button type="button" data-query="Marracash">Marracash</button>
+            <button type="button" data-query="hip hop">Hip hop</button>
+            <button type="button" data-query="lofi">Lofi</button>
+          </div>
+
+          <div class="message" id="messageBox" role="status">
+            Cerca un brano per iniziare.
+          </div>
+
+          <div class="track-grid" id="resultsList" aria-live="polite"></div>
+        </section>
+
+        <aside class="side-pane" aria-label="Player e raccolta">
+          <section class="now-playing" aria-labelledby="nowPlayingTitle">
+            <div class="cover-wrap">
+              <img
+                id="nowCover"
+                src=""
+                alt=""
+                class="cover"
+                width="360"
+                height="360"
+              >
+              <div class="cover-placeholder" id="coverPlaceholder">
+                <span aria-hidden="true">&#9835;</span>
+              </div>
+              <div class="youtube-player-wrap" id="youtubePlayerWrap" hidden>
+                <div id="youtubePlayer"></div>
+              </div>
+            </div>
+            <div class="now-copy">
+              <p class="eyebrow">In riproduzione</p>
+              <h2 id="nowPlayingTitle">Nessun brano</h2>
+              <p id="nowArtist">Scegli un brano dai risultati.</p>
+            </div>
+            <a
+              class="store-link"
+              id="storeLink"
+              href="https://audius.co/"
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled="true"
+            >
+              Apri su Audius
+            </a>
+          </section>
+
+          <section class="lyrics-pane" aria-labelledby="lyricsTitle">
+            <div class="lyrics-heading">
+              <div>
+                <p class="eyebrow">Testi</p>
+                <h2 id="lyricsTitle">Lyrics</h2>
+              </div>
+              <span class="status-pill compact" id="lyricsStatus">In attesa</span>
+            </div>
+            <div class="lyrics-box" id="lyricsBox" aria-live="polite">
+              <p class="lyrics-empty">Seleziona un brano per cercare il testo.</p>
+            </div>
+          </section>
+
+          <section class="library-pane" aria-label="Coda e preferiti">
+            <div class="tabs" role="tablist" aria-label="Raccolta">
+              <button
+                id="queueTab"
+                class="tab active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="queuePanel"
+              >
+                Coda
+              </button>
+              <button
+                id="favoritesTab"
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="favoritesPanel"
+              >
+                Preferiti
+              </button>
+            </div>
+
+            <div id="queuePanel" class="tab-panel active" role="tabpanel" aria-labelledby="queueTab">
+              <div class="mini-list" id="queueList"></div>
+              <p class="empty-note" id="queueEmpty">La coda e' vuota.</p>
+            </div>
+
+            <div id="favoritesPanel" class="tab-panel" role="tabpanel" aria-labelledby="favoritesTab" hidden>
+              <div class="mini-list" id="favoritesList"></div>
+              <p class="empty-note" id="favoritesEmpty">Nessun preferito salvato.</p>
+            </div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="player" aria-label="Controlli player">
+        <audio id="audio" preload="metadata"></audio>
+
+        <div class="player-track">
+          <img id="playerCover" src="" alt="" width="56" height="56">
+          <div>
+            <p id="playerTitle">Nessun brano selezionato</p>
+            <span id="playerArtist">YouTube / Audius</span>
+          </div>
+        </div>
+
+        <div class="transport">
+          <button class="icon-button" type="button" id="prevButton" aria-label="Brano precedente">
+            <span aria-hidden="true">&#9198;</span>
+          </button>
+          <button class="icon-button play" type="button" id="playButton" aria-label="Riproduci">
+            <span aria-hidden="true" id="playIcon">&#9658;</span>
+          </button>
+          <button class="icon-button" type="button" id="nextButton" aria-label="Brano successivo">
+            <span aria-hidden="true">&#9197;</span>
+          </button>
+        </div>
+
+        <div class="timeline">
+          <span id="currentTime">0:00</span>
+          <label class="sr-only" for="seekRange">Avanzamento</label>
+          <input id="seekRange" type="range" min="0" max="100" value="0" step="0.1">
+          <span id="durationTime">0:00</span>
+        </div>
+
+        <div class="volume">
+          <span aria-hidden="true">&#128266;</span>
+          <label class="sr-only" for="volumeRange">Volume</label>
+          <input id="volumeRange" type="range" min="0" max="1" value="0.8" step="0.01">
+        </div>
+      </footer>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>

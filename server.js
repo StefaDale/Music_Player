@@ -11,12 +11,19 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
 const AUDIUS_API_ROOT = "https://api.audius.co/v1";
 const YOUTUBE_API_ROOT = "https://www.googleapis.com/youtube/v3";
 const STATIC_ROOT = __dirname;
-const STATIC_FILES = new Set(["/index.html", "/styles.css", "/app.js", "/config.js"]);
+const STATIC_FILES = new Set([
+  "/index.html",
+  "/styles.css",
+  "/app.js",
+  "/config.js",
+  "/assets/open-music-icon.svg",
+]);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
 };
 
 const server = http.createServer(async (req, res) => {

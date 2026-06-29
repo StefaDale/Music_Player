@@ -9,13 +9,14 @@
       content="Player musicale gratuito con Audius, brani completi, testi, coda e preferiti locali."
     >
     <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="assets/open-music-icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar" aria-label="Barra principale">
         <div class="brand" aria-label="Open Music Player">
-          <span class="brand-mark" aria-hidden="true"></span>
+          <img class="brand-mark" src="assets/open-music-icon.svg" alt="" aria-hidden="true" width="36" height="36">
           <span>Open Music</span>
         </div>
 
@@ -29,9 +30,6 @@
             placeholder="Brano, artista, genere o mood"
             required
           >
-          <button class="icon-button primary" type="submit" aria-label="Cerca">
-            <span aria-hidden="true">&#128269;</span>
-          </button>
         </form>
       </header>
 
@@ -42,7 +40,6 @@
               <p class="eyebrow">YouTube / Audius</p>
               <h1 id="resultsTitle">Ascolta</h1>
             </div>
-            <div class="status-pill" id="resultCount">Pronto</div>
           </div>
 
           <div class="quick-searches" aria-label="Ricerche rapide">
@@ -156,14 +153,26 @@
         </div>
 
         <div class="transport">
-          <button class="icon-button" type="button" id="prevButton" aria-label="Brano precedente">
-            <span aria-hidden="true">&#9198;</span>
+          <button class="icon-button" type="button" id="prevButton" aria-label="Brano precedente" data-tooltip="Brano precedente">
+            <span aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
+                <path fill="currentColor" d="M6 6h2v12H6V6Zm3.5 6L18 6.5v11L9.5 12Z"/>
+              </svg>
+            </span>
           </button>
-          <button class="icon-button play" type="button" id="playButton" aria-label="Riproduci">
-            <span aria-hidden="true" id="playIcon">&#9658;</span>
+          <button class="icon-button play" type="button" id="playButton" aria-label="Riproduci" data-tooltip="Riproduci">
+            <span aria-hidden="true" id="playIcon">
+              <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
+                <path fill="currentColor" d="M8 5.5v13l10-6.5-10-6.5Z"/>
+              </svg>
+            </span>
           </button>
-          <button class="icon-button" type="button" id="nextButton" aria-label="Brano successivo">
-            <span aria-hidden="true">&#9197;</span>
+          <button class="icon-button" type="button" id="nextButton" aria-label="Brano successivo" data-tooltip="Brano successivo">
+            <span aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
+                <path fill="currentColor" d="M16 6h2v12h-2V6Zm-10 6 8.5-5.5v11L6 12Z"/>
+              </svg>
+            </span>
           </button>
         </div>
 

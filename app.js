@@ -2,6 +2,17 @@ const STORAGE_KEY = "open-music-player-state";
 const DEFAULT_QUERY = "electronic";
 const API_BASE_URL = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
 
+const ICONS = {
+  play: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>',
+  pause: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>',
+  moreVertical: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>',
+  queue: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M4 7h9M4 12h9M4 17h7M17 10v8M13 14h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>',
+  favorite: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.22L12 15.97l-4.7 2.47.9-5.22-3.8-3.7 5.25-.76L12 4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/></svg>',
+  favoriteFilled: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="m12 3.8 2.5 5.08 5.6.81-4.05 3.95.96 5.57L12 16.58l-5.01 2.63.96-5.57L3.9 9.69l5.6-.81L12 3.8Z"/></svg>',
+  external: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M9 7h8v8M17 7 7 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>',
+  remove: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg>',
+};
+
 const state = {
   currentTrack: null,
   queue: [],
@@ -79,6 +90,18 @@ function bindEvents() {
 
   document.querySelectorAll("[data-query]").forEach((button) => {
     button.addEventListener("click", () => runSearch(button.dataset.query));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".track-menu")) {
+      closeTrackMenus();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeTrackMenus();
+    }
   });
 
   els.playButton.addEventListener("click", togglePlayback);
@@ -162,7 +185,7 @@ async function runSearch(query) {
   state.results = [];
   renderResults();
   setMessage("Ricerca in corso...");
-  els.resultCount.textContent = "Caricamento";
+  setResultCount("Caricamento");
 
   try {
     const data = await fetchJson(`/api/search?q=${encodeURIComponent(query)}&limit=24`);
@@ -177,12 +200,12 @@ async function runSearch(query) {
 
     if (state.results.length) {
       setMessage("Risultati da YouTube/Audius. Testi cercati via LRCLIB.");
-      els.resultCount.textContent = `${state.results.length} brani`;
+      setResultCount(`${state.results.length} brani`);
     } else {
       setMessage(state.youtubeConfigured
         ? "Nessun brano riproducibile trovato."
         : "Nessun risultato: per artisti mainstream configura YOUTUBE_API_KEY.");
-      els.resultCount.textContent = "0 brani";
+      setResultCount("0 brani");
     }
   } catch (error) {
     if (searchId !== activeSearchId) {
@@ -191,7 +214,7 @@ async function runSearch(query) {
 
     console.error(error);
     setMessage("Non riesco a contattare Audius in questo momento.");
-    els.resultCount.textContent = "Errore";
+    setResultCount("Errore");
   }
 }
 
@@ -240,6 +263,11 @@ function renderResults() {
 function createTrackCard(track) {
   const card = document.createElement("article");
   card.className = "track-card";
+  card.tabIndex = 0;
+  card.setAttribute("aria-label", `Riproduci ${track.title}`);
+  const sourceLabel = track.source === "youtube" ? "YouTube" : "Audius";
+  const sourceActionLabel = `Apri su ${sourceLabel}`;
+  const favoriteLabel = isFavorite(track.id) ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti";
   card.innerHTML = `
     <img src="${escapeAttribute(track.cover)}" alt="">
     <div class="track-info">
@@ -249,27 +277,77 @@ function createTrackCard(track) {
       </div>
       <p class="track-stats">${formatTime(track.duration)}${track.playCount ? ` - ${formatCount(track.playCount)} ascolti` : ""}</p>
       <div class="track-actions">
-        <button class="icon-button" type="button" data-action="play" aria-label="Riproduci ${escapeAttribute(track.title)}">
-          <span aria-hidden="true">&#9658;</span>
+        <button class="icon-button track-play" type="button" data-action="play" aria-label="Riproduci ${escapeAttribute(track.title)}" data-tooltip="Riproduci">
+          <span aria-hidden="true">${iconSvg("play")}</span>
         </button>
-        <button class="icon-button" type="button" data-action="queue" aria-label="Aggiungi alla coda">
-          <span aria-hidden="true">+</span>
-        </button>
-        <button class="icon-button" type="button" data-action="favorite" aria-label="Aggiungi ai preferiti">
-          <span aria-hidden="true">${isFavorite(track.id) ? "&#9733;" : "&#9734;"}</span>
-        </button>
-        <a class="icon-button" href="${escapeAttribute(track.link)}" target="_blank" rel="noreferrer" aria-label="${track.source === "youtube" ? "Apri su YouTube" : "Apri su Audius"}">
-          <span aria-hidden="true">&#8599;</span>
-        </a>
+        <div class="track-menu">
+          <button class="icon-button track-menu-toggle" type="button" data-action="menu" aria-label="Altre azioni" aria-expanded="false" data-tooltip="Altre azioni">
+            <span aria-hidden="true">${iconSvg("moreVertical")}</span>
+          </button>
+          <div class="track-menu-panel" role="menu">
+            <button class="track-menu-item" type="button" data-action="queue" role="menuitem" aria-label="Aggiungi alla coda" title="Aggiungi alla coda">
+              <span aria-hidden="true">${iconSvg("queue")}</span>
+              <span>Aggiungi alla coda</span>
+            </button>
+            <button class="track-menu-item" type="button" data-action="favorite" role="menuitem" aria-label="${escapeAttribute(favoriteLabel)}" title="${escapeAttribute(favoriteLabel)}">
+              <span aria-hidden="true">${iconSvg(isFavorite(track.id) ? "favoriteFilled" : "favorite")}</span>
+              <span>${favoriteLabel}</span>
+            </button>
+            <a class="track-menu-item" href="${escapeAttribute(track.link)}" target="_blank" rel="noreferrer" role="menuitem" aria-label="${escapeAttribute(sourceActionLabel)}" title="${escapeAttribute(sourceActionLabel)}">
+              <span aria-hidden="true">${iconSvg("external")}</span>
+              <span>${sourceActionLabel}</span>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   `;
 
+  const menu = card.querySelector(".track-menu");
+  const menuToggle = card.querySelector('[data-action="menu"]');
+
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("button, a, .track-menu")) {
+      return;
+    }
+    playTrack(track);
+  });
+
+  card.addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target === card) {
+      event.preventDefault();
+      playTrack(track);
+    }
+  });
+
   card.querySelector('[data-action="play"]').addEventListener("click", () => playTrack(track));
-  card.querySelector('[data-action="queue"]').addEventListener("click", () => addToQueue(track));
-  card.querySelector('[data-action="favorite"]').addEventListener("click", () => toggleFavorite(track));
+  menuToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const shouldOpen = !menu.classList.contains("open");
+    closeTrackMenus();
+    menu.classList.toggle("open", shouldOpen);
+    menuToggle.setAttribute("aria-expanded", String(shouldOpen));
+  });
+  card.querySelector('[data-action="queue"]').addEventListener("click", (event) => {
+    event.stopPropagation();
+    addToQueue(track);
+    closeTrackMenus();
+  });
+  card.querySelector('[data-action="favorite"]').addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleFavorite(track);
+    closeTrackMenus();
+  });
+  card.querySelector(".track-menu-item[href]").addEventListener("click", () => closeTrackMenus());
 
   return card;
+}
+
+function closeTrackMenus() {
+  document.querySelectorAll(".track-menu.open").forEach((menu) => {
+    menu.classList.remove("open");
+    menu.querySelector(".track-menu-toggle")?.setAttribute("aria-expanded", "false");
+  });
 }
 
 function renderCurrentTrack() {
@@ -307,8 +385,10 @@ function renderCurrentTrack() {
 }
 
 function renderPlaybackState() {
-  els.playIcon.innerHTML = state.isPlaying ? "&#10074;&#10074;" : "&#9658;";
-  els.playButton.setAttribute("aria-label", state.isPlaying ? "Metti in pausa" : "Riproduci");
+  const label = state.isPlaying ? "Metti in pausa" : "Riproduci";
+  els.playIcon.innerHTML = state.isPlaying ? iconSvg("pause") : iconSvg("play");
+  els.playButton.setAttribute("aria-label", label);
+  els.playButton.dataset.tooltip = label;
 }
 
 function renderQueue() {
@@ -316,7 +396,7 @@ function renderQueue() {
   state.queue.forEach((track, index) => {
     els.queueList.appendChild(createMiniTrack(track, {
       actionLabel: "Rimuovi dalla coda",
-      actionIcon: "&times;",
+      actionIcon: iconSvg("remove"),
       onPlay: () => {
         state.queue.splice(index, 1);
         playTrack(track);
@@ -336,7 +416,7 @@ function renderFavorites() {
   state.favorites.forEach((track) => {
     els.favoritesList.appendChild(createMiniTrack(track, {
       actionLabel: "Rimuovi dai preferiti",
-      actionIcon: "&#9733;",
+      actionIcon: iconSvg("favoriteFilled"),
       onPlay: () => playTrack(track),
       onAction: () => toggleFavorite(track),
     }));
@@ -353,7 +433,7 @@ function createMiniTrack(track, options) {
       <span class="mini-title">${escapeHtml(track.title)}</span>
       <span class="mini-meta">${escapeHtml(track.artist)}</span>
     </button>
-    <button class="icon-button" type="button" aria-label="${escapeAttribute(options.actionLabel)}">
+    <button class="icon-button" type="button" aria-label="${escapeAttribute(options.actionLabel)}" data-tooltip="${escapeAttribute(options.actionLabel)}">
       <span aria-hidden="true">${options.actionIcon}</span>
     </button>
   `;
@@ -868,6 +948,16 @@ function restoreState() {
 
 function setMessage(message) {
   els.messageBox.textContent = message;
+}
+
+function setResultCount(value) {
+  if (els.resultCount) {
+    els.resultCount.textContent = value;
+  }
+}
+
+function iconSvg(name) {
+  return ICONS[name] || "";
 }
 
 function escapeHtml(value) {

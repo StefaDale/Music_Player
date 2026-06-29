@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Open Music Player icon</title>
+  <desc id="desc">A compact neon music player icon with equalizer bars and a play mark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18251f"/>
+      <stop offset="0.52" stop-color="#131412"/>
+      <stop offset="1" stop-color="#30201e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="15" y1="14" x2="50" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2ee59d"/>
+      <stop offset="1" stop-color="#ff7066"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <circle cx="45" cy="19" r="8" fill="#2ee59d" opacity="0.95"/>
+  <path d="M42 14.8v8.4l7-4.2-7-4.2Z" fill="#11130f"/>
+  <rect x="15" y="18" width="6" height="28" rx="3" fill="#f7f5ed"/>
+  <rect x="25" y="12" width="6" height="40" rx="3" fill="#2ee59d"/>
+  <rect x="35" y="24" width="6" height="22" rx="3" fill="#ff7066"/>
+  <path d="M14 50h37" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
+</svg>

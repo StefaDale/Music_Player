@@ -111,19 +111,15 @@ img {
 .brand-mark {
   width: 36px;
   height: 36px;
+  display: block;
   border-radius: 8px;
-  background:
-    linear-gradient(90deg, transparent 0 15%, var(--accent-2) 15% 32%, transparent 32% 100%),
-    linear-gradient(90deg, transparent 0 42%, var(--accent-3) 42% 59%, transparent 59% 100%),
-    linear-gradient(90deg, transparent 0 69%, var(--accent) 69% 86%, transparent 86% 100%);
-  background-color: #f7f5ed;
+  object-fit: cover;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
 }
 
 .search {
   display: grid;
-  grid-template-columns: 1fr 48px;
-  gap: 10px;
+  grid-template-columns: 1fr;
   width: 100%;
   min-width: 0;
 }
@@ -226,6 +222,7 @@ img {
 }
 
 .icon-button {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 44px;
@@ -266,11 +263,48 @@ img {
   border-color: transparent;
 }
 
+.ui-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
 .icon-button.play {
   width: 54px;
   height: 54px;
   flex-basis: 54px;
   font-size: 1.15rem;
+}
+
+[data-tooltip]::after {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 80;
+  max-width: min(220px, 80vw);
+  padding: 7px 9px;
+  color: #f7f5ed;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  content: attr(data-tooltip);
+  pointer-events: none;
+  background: rgba(18, 18, 16, 0.94);
+  border: 1px solid rgba(247, 245, 237, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .workspace {
@@ -409,16 +443,28 @@ h2 {
 }
 
 .track-card {
+  position: relative;
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   gap: 12px;
   min-height: 122px;
   padding: 12px;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   background: var(--panel-strong);
   border: 1px solid var(--line);
   border-radius: 8px;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.track-card:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(46, 229, 157, 0.32);
 }
 
 .track-card img,
@@ -490,7 +536,7 @@ h2 {
 .track-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
 }
@@ -503,6 +549,58 @@ h2 {
 
 .track-actions a.icon-button {
   text-decoration: none;
+}
+
+.track-menu {
+  position: relative;
+}
+
+.track-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: none;
+  min-width: 205px;
+  padding: 6px;
+  background: rgba(18, 18, 16, 0.96);
+  border: 1px solid rgba(247, 245, 237, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.track-menu.open .track-menu-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.track-menu-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 38px;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  font-weight: 750;
+  text-align: left;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+
+.track-menu-item:hover,
+.track-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.track-menu-item span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-pane {
@@ -800,12 +898,12 @@ h2 {
   min-height: 84px;
   margin: 0 auto;
   padding: 14px;
-  overflow: hidden;
-  background: rgba(18, 18, 16, 0.92);
-  border: 1px solid rgba(247, 245, 237, 0.18);
+  overflow: visible;
+  background: rgba(18, 18, 16, 0.48);
+  border: 1px solid rgba(247, 245, 237, 0.14);
   border-radius: 8px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(22px) saturate(135%);
 }
 
 .player-track {
@@ -968,10 +1066,6 @@ input[type="range"] {
     font-size: 1rem;
   }
 
-  .search {
-    grid-template-columns: 1fr 44px;
-  }
-
   .track-card {
     grid-template-columns: 64px minmax(0, 1fr);
     gap: 10px;
@@ -992,6 +1086,10 @@ input[type="range"] {
     height: 34px;
     min-width: 34px;
     flex-basis: 34px;
+  }
+
+  .track-menu-panel {
+    min-width: 190px;
   }
 
   .quick-searches button {

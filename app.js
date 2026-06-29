@@ -1,6 +1,7 @@
 const STORAGE_KEY = "open-music-player-state";
-const DEFAULT_QUERY = "electronic";
-const API_BASE_URL = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+const DEFAULT_QUERY = "top hits italia";
+const REQUEST_TIMEOUT_MS = 70000;
+const API_BASE_URL = getApiBaseUrl();
 
 const ICONS = {
   play: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>',
@@ -79,7 +80,7 @@ async function init() {
   renderAll();
   loadYouTubeApi();
   await detectServer();
-  runSearch(state.youtubeConfigured ? "Fabri Fibra" : DEFAULT_QUERY);
+  runSearch(DEFAULT_QUERY, { syncInput: false });
 }
 
 function bindEvents() {
@@ -166,22 +167,24 @@ async function detectServer() {
     }
   } catch (error) {
     state.serverAvailable = false;
-    setMessage("Server locale non raggiungibile.");
+    setMessage(getBackendUnavailableMessage(error));
   }
 }
 
-async function runSearch(query) {
+async function runSearch(query, options = {}) {
   if (!query) {
     return;
   }
 
   if (!state.serverAvailable) {
-    setMessage("Avvia il server locale con npm start.");
+    setMessage(getBackendUnavailableMessage());
     return;
   }
 
   const searchId = ++activeSearchId;
-  els.searchInput.value = query;
+  if (options.syncInput !== false) {
+    els.searchInput.value = query;
+  }
   state.results = [];
   renderResults();
   setMessage("Ricerca in corso...");
@@ -213,16 +216,20 @@ async function runSearch(query) {
     }
 
     console.error(error);
-    setMessage("Non riesco a contattare Audius in questo momento.");
+    setMessage(getBackendUnavailableMessage(error));
     setResultCount("Errore");
   }
 }
 
 async function fetchJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   const response = await fetch(resolveApiUrl(url), {
     credentials: API_BASE_URL ? "omit" : "same-origin",
+    signal: controller.signal,
     ...options,
-  });
+  }).finally(() => window.clearTimeout(timeout));
 
   const text = await response.text();
   const payload = text ? JSON.parse(text) : null;
@@ -234,12 +241,31 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+function getBackendUnavailableMessage(error) {
+  if (error?.name === "AbortError") {
+    return "Il backend online sta impiegando troppo tempo a rispondere. Ricarica tra qualche secondo.";
+  }
+
+  return API_BASE_URL
+    ? "Backend online non raggiungibile in questo momento. Riprova tra poco."
+    : "Avvia il server locale con npm start.";
+}
+
 function resolveApiUrl(url) {
   if (!API_BASE_URL || !url.startsWith("/api/")) {
     return url;
   }
 
   return `${API_BASE_URL}${url}`;
+}
+
+function getApiBaseUrl() {
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (localHosts.has(window.location.hostname)) {
+    return "";
+  }
+
+  return (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
 }
 
 function renderAll() {

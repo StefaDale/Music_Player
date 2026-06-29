@@ -86,8 +86,13 @@ async function handleSearch(res, url) {
   searchUrl.searchParams.set("app_name", APP_NAME);
   searchUrl.searchParams.set("limit", String(limit));
 
+  let youtubeError = "";
   const youtubeResults = YOUTUBE_API_KEY
-    ? await searchYouTube(query, limit).catch(() => [])
+    ? await searchYouTube(query, limit).catch((error) => {
+        youtubeError = error.message || "YouTube search failed";
+        console.error("YouTube search failed:", error);
+        return [];
+      })
     : [];
 
   if (youtubeResults.length) {
@@ -106,6 +111,7 @@ async function handleSearch(res, url) {
 
   sendJson(res, {
     resultCount: results.length,
+    youtubeError,
     results,
   });
 }

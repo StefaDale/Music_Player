@@ -248,7 +248,6 @@ img {
 .icon-button:focus-visible,
 .account-button:focus-visible,
 .small-button:focus-visible,
-.quick-searches button:focus-visible,
 .tab:focus-visible,
 .store-link:focus-visible,
 .track-card:focus-within {
@@ -391,14 +390,6 @@ h2 {
   border-radius: 999px;
 }
 
-.quick-searches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.quick-searches button,
 .tab,
 .store-link {
   min-height: 38px;
@@ -408,12 +399,6 @@ h2 {
   border-radius: 8px;
 }
 
-.quick-searches button {
-  padding: 0 12px;
-  min-width: 0;
-}
-
-.quick-searches button:hover,
 .tab:hover,
 .store-link:hover {
   border-color: rgba(255, 255, 255, 0.28);
@@ -462,9 +447,13 @@ h2 {
 }
 
 .track-card:hover {
-  transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.075);
   border-color: rgba(46, 229, 157, 0.32);
+}
+
+.track-card.menu-open {
+  z-index: 120;
+  border-color: rgba(46, 229, 157, 0.42);
 }
 
 .track-card img,
@@ -497,6 +486,11 @@ h2 {
   font-weight: 800;
 }
 
+.player-track p {
+  max-width: 100%;
+  line-height: 1.25;
+}
+
 .track-title {
   display: -webkit-box;
   white-space: normal;
@@ -519,6 +513,15 @@ h2 {
   font-size: 0.86rem;
   text-overflow: ellipsis;
   overflow-wrap: anywhere;
+}
+
+.player-track span {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
 }
 
 .track-meta {
@@ -544,7 +547,15 @@ h2 {
 .track-actions .icon-button {
   width: 36px;
   height: 36px;
+  min-width: 36px;
   flex-basis: 36px;
+  padding: 0;
+}
+
+.track-actions .icon-button:disabled,
+.track-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .track-actions a.icon-button {
@@ -556,12 +567,13 @@ h2 {
 }
 
 .track-menu-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 60;
+  position: fixed;
+  top: var(--menu-top, 0);
+  left: var(--menu-left, 0);
+  z-index: 500;
   display: none;
-  min-width: 205px;
+  width: var(--menu-width, 280px);
+  max-width: calc(100vw - 24px);
   padding: 6px;
   background: rgba(18, 18, 16, 0.96);
   border: 1px solid rgba(247, 245, 237, 0.16);
@@ -891,13 +903,13 @@ h2 {
   left: 20px;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(280px, 1.35fr) auto minmax(220px, 1.5fr) minmax(120px, 0.55fr);
-  gap: 16px;
+  grid-template-columns: minmax(320px, 1.55fr) auto minmax(260px, 1.45fr) minmax(150px, 0.65fr);
+  gap: 22px;
   align-items: center;
   max-width: 1440px;
   min-height: 84px;
   margin: 0 auto;
-  padding: 14px;
+  padding: 16px 18px;
   overflow: visible;
   background: rgba(18, 18, 16, 0.48);
   border: 1px solid rgba(247, 245, 237, 0.14);
@@ -909,13 +921,14 @@ h2 {
 .player-track {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
-  gap: 12px;
+  gap: 14px;
   align-items: center;
   min-width: 0;
-  overflow: hidden;
 }
 
 .player-track > div {
+  display: grid;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -925,11 +938,40 @@ h2 {
   border-radius: 8px;
 }
 
+.player.is-empty {
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.player.is-empty .timeline,
+.player.is-empty .volume {
+  display: none;
+}
+
+.player.is-empty .transport .icon-button:not(.play) {
+  opacity: 0.45;
+}
+
+.player.is-empty .player-track {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.player.is-empty .player-track img {
+  display: none;
+}
+
+.player.is-empty .player-track p {
+  color: rgba(247, 245, 237, 0.92);
+}
+
+.player.is-empty .player-track span {
+  color: rgba(247, 245, 237, 0.56);
+}
+
 .transport {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -941,24 +983,96 @@ h2 {
 }
 
 .timeline {
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
   min-width: 0;
 }
 
 .timeline span {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+  line-height: 1;
+  padding: 6px 0;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(247, 245, 237, 0.08);
+  border-radius: 999px;
 }
 
 .volume {
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   min-width: 0;
 }
 
+.volume > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(247, 245, 237, 0.08);
+  border-radius: 50%;
+}
+
 input[type="range"] {
+  --range-progress: 0%;
+  appearance: none;
+  -webkit-appearance: none;
   width: 100%;
-  accent-color: var(--accent-2);
+  height: 22px;
+  min-width: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 7px;
+  background:
+    linear-gradient(90deg, var(--accent-2) 0 var(--range-progress), rgba(247, 245, 237, 0.18) var(--range-progress) 100%);
+  border: 1px solid rgba(247, 245, 237, 0.08);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  background: #f7f5ed;
+  border: 4px solid var(--accent-2);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(46, 229, 157, 0.28);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 8px 22px rgba(46, 229, 157, 0.38);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 7px;
+  background: rgba(247, 245, 237, 0.18);
+  border: 1px solid rgba(247, 245, 237, 0.08);
+  border-radius: 999px;
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 7px;
+  background: var(--accent-2);
+  border-radius: 999px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #f7f5ed;
+  border: 4px solid var(--accent-2);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(46, 229, 157, 0.28);
 }
 
 @media (max-width: 1040px) {
@@ -1093,14 +1207,7 @@ input[type="range"] {
   }
 
   .track-menu-panel {
-    min-width: 190px;
-  }
-
-  .quick-searches button {
-    flex: 1 1 calc(50% - 10px);
-    padding: 0 8px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    width: var(--menu-width, 190px);
   }
 
   .player {

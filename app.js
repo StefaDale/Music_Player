@@ -35,6 +35,7 @@ const state = {
 let activeSearchId = 0;
 let activeLyricsId = 0;
 let youtubePlayer = null;
+let youtubePlayerReady = false;
 let pendingYouTubeTrack = null;
 let youtubeProgressTimer = null;
 
@@ -89,8 +90,13 @@ function bindEvents() {
     runSearch(els.searchInput.value.trim());
   });
 
-  document.querySelectorAll("[data-query]").forEach((button) => {
-    button.addEventListener("click", () => runSearch(button.dataset.query));
+  els.searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    runSearch(els.searchInput.value.trim());
   });
 
   document.addEventListener("click", (event) => {
@@ -105,11 +111,15 @@ function bindEvents() {
     }
   });
 
+  window.addEventListener("scroll", closeTrackMenus, { passive: true });
+  window.addEventListener("resize", closeTrackMenus);
+
   els.playButton.addEventListener("click", togglePlayback);
   els.prevButton.addEventListener("click", playPreviousTrack);
   els.nextButton.addEventListener("click", playNextTrack);
 
   els.seekRange.addEventListener("input", () => {
+    updateRangeProgress(els.seekRange);
     if (state.currentTrack?.source === "youtube" && youtubePlayer?.seekTo) {
       youtubePlayer.seekTo(Number(els.seekRange.value), true);
       updateActiveLyric();
@@ -121,6 +131,7 @@ function bindEvents() {
 
   els.volumeRange.addEventListener("input", () => {
     els.audio.volume = Number(els.volumeRange.value);
+    updateRangeProgress(els.volumeRange);
   });
 
   els.audio.addEventListener("play", () => {
@@ -149,6 +160,8 @@ function bindEvents() {
   els.favoritesTab.addEventListener("click", () => setActiveTab("favorites"));
 
   els.audio.volume = Number(els.volumeRange.value);
+  updateRangeProgress(els.volumeRange);
+  updateRangeProgress(els.seekRange);
 }
 
 async function detectServer() {
@@ -352,7 +365,11 @@ function createTrackCard(track) {
     const shouldOpen = !menu.classList.contains("open");
     closeTrackMenus();
     menu.classList.toggle("open", shouldOpen);
+    card.classList.toggle("menu-open", shouldOpen);
     menuToggle.setAttribute("aria-expanded", String(shouldOpen));
+    if (shouldOpen) {
+      positionTrackMenu(menu, card);
+    }
   });
   card.querySelector('[data-action="queue"]').addEventListener("click", (event) => {
     event.stopPropagation();
@@ -371,15 +388,35 @@ function createTrackCard(track) {
 
 function closeTrackMenus() {
   document.querySelectorAll(".track-menu.open").forEach((menu) => {
+    menu.closest(".track-card")?.classList.remove("menu-open");
     menu.classList.remove("open");
     menu.querySelector(".track-menu-toggle")?.setAttribute("aria-expanded", "false");
+    menu.style.removeProperty("--menu-top");
+    menu.style.removeProperty("--menu-left");
+    menu.style.removeProperty("--menu-width");
   });
+}
+
+function positionTrackMenu(menu, card) {
+  const rect = card.getBoundingClientRect();
+  const edge = 12;
+  const width = Math.min(rect.width, window.innerWidth - edge * 2);
+  const left = Math.min(
+    window.innerWidth - width - edge,
+    Math.max(edge, rect.left),
+  );
+  const top = rect.bottom + 8;
+
+  menu.style.setProperty("--menu-left", `${left}px`);
+  menu.style.setProperty("--menu-top", `${top}px`);
+  menu.style.setProperty("--menu-width", `${width}px`);
 }
 
 function renderCurrentTrack() {
   const track = state.currentTrack;
 
   if (!track) {
+    document.querySelector(".player")?.classList.add("is-empty");
     els.youtubePlayerWrap.hidden = true;
     els.nowCover.hidden = false;
     els.coverPlaceholder.hidden = false;
@@ -387,14 +424,19 @@ function renderCurrentTrack() {
     els.nowTitle.textContent = "Nessun brano";
     els.nowArtist.textContent = "Scegli un brano dai risultati.";
     els.playerCover.src = "";
-    els.playerTitle.textContent = "Nessun brano selezionato";
-    els.playerArtist.textContent = "YouTube / Audius";
+    els.playerTitle.textContent = "Nessun brano";
+    els.playerArtist.textContent = "Scegli una traccia";
+    els.seekRange.value = 0;
+    els.currentTime.textContent = "0:00";
+    els.durationTime.textContent = "0:00";
+    updateRangeProgress(els.seekRange);
     els.storeLink.href = "https://audius.co/";
     els.storeLink.setAttribute("aria-disabled", "true");
     els.storeLink.textContent = "Apri sorgente";
     return;
   }
 
+  document.querySelector(".player")?.classList.remove("is-empty");
   const youtubeTrack = track.source === "youtube";
   els.youtubePlayerWrap.hidden = !youtubeTrack;
   els.nowCover.hidden = youtubeTrack;
@@ -558,7 +600,7 @@ async function playTrack(track) {
   }
 
   state.currentTrack = track;
-  els.audio.src = track.stream;
+  els.audio.src = resolveApiUrl(track.stream);
   stopYouTube();
   resetLyrics("loading");
   renderCurrentTrack();
@@ -597,15 +639,14 @@ function playYouTubeTrack(track) {
 function loadYouTubeApi() {
   if (window.YT?.Player) {
     state.youtubeReady = true;
+    ensureYouTubePlayer();
     return;
   }
 
   const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
   window.onYouTubeIframeAPIReady = () => {
     state.youtubeReady = true;
-    if (pendingYouTubeTrack) {
-      startYouTubePlayback(pendingYouTubeTrack);
-    }
+    ensureYouTubePlayer();
   };
 
   if (!existingScript) {
@@ -615,35 +656,50 @@ function loadYouTubeApi() {
   }
 }
 
+function ensureYouTubePlayer() {
+  if (!state.youtubeReady || !window.YT?.Player) {
+    return;
+  }
+
+  if (youtubePlayer) {
+    return;
+  }
+
+  youtubePlayer = new YT.Player("youtubePlayer", {
+    width: "100%",
+    height: "100%",
+    playerVars: {
+      autoplay: 0,
+      controls: 0,
+      modestbranding: 1,
+      playsinline: 1,
+      rel: 0,
+      origin: window.location.origin,
+    },
+    events: {
+      onReady: () => {
+        youtubePlayerReady = true;
+        if (pendingYouTubeTrack) {
+          startYouTubePlayback(pendingYouTubeTrack);
+        }
+      },
+      onStateChange: handleYouTubeStateChange,
+      onError: handleYouTubeError,
+    },
+  });
+}
+
 function startYouTubePlayback(track) {
   if (!state.youtubeReady || !window.YT?.Player) {
     setMessage("Carico il player YouTube...");
     return;
   }
 
+  ensureYouTubePlayer();
   els.youtubePlayerWrap.hidden = false;
 
-  if (!youtubePlayer) {
-    youtubePlayer = new YT.Player("youtubePlayer", {
-      width: "100%",
-      height: "100%",
-      videoId: track.youtubeId,
-      playerVars: {
-        autoplay: 1,
-        controls: 0,
-        modestbranding: 1,
-        rel: 0,
-        origin: window.location.origin,
-      },
-      events: {
-        onReady: (event) => {
-          event.target.playVideo();
-          startYouTubeTimer();
-        },
-        onStateChange: handleYouTubeStateChange,
-        onError: handleYouTubeError,
-      },
-    });
+  if (!youtubePlayerReady || !youtubePlayer?.loadVideoById) {
+    setMessage("Preparo il player YouTube...");
     return;
   }
 
@@ -652,15 +708,33 @@ function startYouTubePlayback(track) {
   startYouTubeTimer();
 }
 
-function handleYouTubeError() {
-  setMessage("Questo video non si puo' incorporare qui, passo al prossimo risultato.");
-  playNextTrack();
+function handleYouTubeError(event) {
+  const errorCode = event?.data;
+  stopYouTubeTimer();
+  pendingYouTubeTrack = null;
+  state.isPlaying = false;
+  renderPlaybackState();
+  updateTimeline();
+  setMessage(getYouTubeErrorMessage(errorCode));
+}
+
+function getYouTubeErrorMessage(errorCode) {
+  if (errorCode === 101 || errorCode === 150) {
+    return "Il proprietario del video non consente la riproduzione fuori da YouTube. Aprilo su YouTube o scegli un altro risultato.";
+  }
+
+  if (errorCode === 100) {
+    return "Questo video non e' piu' disponibile o e' privato. Scegli un altro risultato.";
+  }
+
+  return "Questo video non si puo' riprodurre nell'app. Puoi aprirlo su YouTube o scegliere un altro risultato.";
 }
 
 function handleYouTubeStateChange(event) {
   const stateCode = event.data;
 
   if (stateCode === YT.PlayerState.PLAYING) {
+    pendingYouTubeTrack = null;
     state.isPlaying = true;
     startYouTubeTimer();
   } else if (stateCode === YT.PlayerState.PAUSED) {
@@ -922,6 +996,17 @@ function updateTimeline() {
   els.seekRange.value = current;
   els.currentTime.textContent = formatTime(current);
   els.durationTime.textContent = formatTime(duration);
+  updateRangeProgress(els.seekRange);
+}
+
+function updateRangeProgress(range) {
+  const min = Number(range.min || 0);
+  const max = Number(range.max || 100);
+  const value = Number(range.value || 0);
+  const progress = max > min
+    ? ((value - min) / (max - min)) * 100
+    : 0;
+  range.style.setProperty("--range-progress", `${Math.min(100, Math.max(0, progress))}%`);
 }
 
 function getPlaybackTime() {
@@ -965,7 +1050,7 @@ function restoreState() {
     state.activeTab = saved.activeTab || "queue";
 
     if (state.currentTrack?.stream) {
-      els.audio.src = state.currentTrack.stream;
+      els.audio.src = resolveApiUrl(state.currentTrack.stream);
     }
   } catch (error) {
     localStorage.removeItem(STORAGE_KEY);

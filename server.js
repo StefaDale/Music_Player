@@ -88,11 +88,6 @@ async function handleSearch(res, url) {
     return;
   }
 
-  const searchUrl = new URL(`${AUDIUS_API_ROOT}/tracks/search`);
-  searchUrl.searchParams.set("query", query);
-  searchUrl.searchParams.set("app_name", APP_NAME);
-  searchUrl.searchParams.set("limit", String(limit));
-
   let youtubeError = "";
   const youtubeResults = YOUTUBE_API_KEY
     ? await searchYouTube(query, limit).catch((error) => {
@@ -102,18 +97,27 @@ async function handleSearch(res, url) {
       })
     : [];
 
+  const audiusResults = await searchAudius(query, limit).catch((error) => {
+    console.error("Audius search failed:", error);
+    return [];
+  });
+
   if (youtubeResults.length) {
+    const youtubeLimit = Math.min(youtubeResults.length, limit, Math.max(8, Math.ceil(limit * 0.65)));
+    const backupLimit = Math.max(0, limit - youtubeLimit);
+    const results = [
+      ...youtubeResults.slice(0, youtubeLimit),
+      ...audiusResults.slice(0, backupLimit),
+    ];
+
     sendJson(res, {
-      resultCount: youtubeResults.length,
-      results: youtubeResults.slice(0, limit),
+      resultCount: results.length,
+      youtubeError,
+      results,
     });
     return;
   }
 
-  const audiusPayload = await requestJson(searchUrl);
-  const audiusResults = Array.isArray(audiusPayload.data)
-    ? audiusPayload.data.filter((track) => track.is_streamable !== false).map(normalizeAudiusTrack)
-    : [];
   const results = audiusResults.slice(0, limit);
 
   sendJson(res, {
@@ -121,6 +125,18 @@ async function handleSearch(res, url) {
     youtubeError,
     results,
   });
+}
+
+async function searchAudius(query, limit) {
+  const searchUrl = new URL(`${AUDIUS_API_ROOT}/tracks/search`);
+  searchUrl.searchParams.set("query", query);
+  searchUrl.searchParams.set("app_name", APP_NAME);
+  searchUrl.searchParams.set("limit", String(limit));
+
+  const audiusPayload = await requestJson(searchUrl);
+  return Array.isArray(audiusPayload.data)
+    ? audiusPayload.data.filter((track) => track.is_streamable !== false).map(normalizeAudiusTrack)
+    : [];
 }
 
 async function searchYouTube(query, limit) {
@@ -250,6 +266,14 @@ function normalizeYouTubeVideo(video) {
   const parsed = parseYouTubeTitle(snippet.title || "");
   const thumbnails = snippet.thumbnails || {};
   const cover = thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || "";
+  const contentDetails = video.contentDetails || {};
+  const regionRestriction = contentDetails.regionRestriction || {};
+  const blockedRegions = Array.isArray(regionRestriction.blocked) ? regionRestriction.blocked : [];
+  const allowedRegions = Array.isArray(regionRestriction.allowed) ? regionRestriction.allowed : [];
+  const playableInItaly = !blockedRegions.includes("IT")
+    && (!allowedRegions.length || allowedRegions.includes("IT"));
+  const liveBroadcast = snippet.liveBroadcastContent && snippet.liveBroadcastContent !== "none";
+  const ageRestricted = contentDetails.contentRating?.ytRating === "ytAgeRestricted";
 
   return {
     id: `youtube:${videoId}`,
@@ -266,7 +290,11 @@ function normalizeYouTubeVideo(video) {
     playCount: Number(video.statistics?.viewCount) || 0,
     favoriteCount: Number(video.statistics?.likeCount) || 0,
     genre: "YouTube",
-    embeddable: video.status?.embeddable !== false && video.status?.privacyStatus === "public",
+    embeddable: video.status?.embeddable !== false
+      && video.status?.privacyStatus === "public"
+      && playableInItaly
+      && !liveBroadcast
+      && !ageRestricted,
   };
 }
 
@@ -275,7 +303,13 @@ function scoreYouTubeResult(video, query) {
   const queryTokens = queryText.split(/\s+/).filter(Boolean);
   const titleText = normalizeText(video.title);
   const artistText = normalizeText(video.artist);
-  const combinedText = `${artistText} ${titleText}`;
+  const cleanArtistText = cleanYouTubeArtistText(artistText);
+  const combinedText = `${cleanArtistText} ${titleText}`.trim();
+  const artistInQuery = tokenCoverage(cleanArtistText, queryText);
+  const titleInQuery = tokenCoverage(titleText, queryText);
+  const queryInResult = tokenCoverage(queryText, combinedText);
+  const searchWantsLyrics = /\b(lyrics|lyric|testo|sub|traduzione)\b/i.test(query);
+  const searchWantsLive = /\b(live|concerto|radio italia)\b/i.test(query);
   let score = 0;
 
   for (const token of queryTokens) {
@@ -284,12 +318,45 @@ function scoreYouTubeResult(video, query) {
     }
   }
 
-  if (artistText === queryText || artistText.startsWith(queryText)) {
+  if (cleanArtistText === queryText || cleanArtistText.startsWith(queryText)) {
     score += 35;
   }
 
-  if (titleText.includes(queryText)) {
-    score += 16;
+  if (combinedText === queryText) {
+    score += 70;
+  }
+
+  if (cleanArtistText && queryText.startsWith(`${cleanArtistText} `)) {
+    const remainingQuery = queryText.slice(cleanArtistText.length).trim();
+    score += 25 + Math.round(tokenCoverage(remainingQuery, titleText) * 35);
+  }
+
+  if (titleText === queryText) {
+    score += 45;
+  } else if (titleText.includes(queryText)) {
+    score += 22;
+  }
+
+  if (titleText && queryText.endsWith(titleText)) {
+    score += 30;
+  }
+
+  if (artistInQuery >= 0.8 && titleInQuery >= 0.75) {
+    score += 45;
+  } else if (artistInQuery >= 0.8 && titleInQuery >= 0.5) {
+    score += 25;
+  }
+
+  if (queryInResult >= 0.85) {
+    score += 30;
+  }
+
+  if (cleanArtistText && queryText.includes(cleanArtistText)) {
+    score += 10;
+  }
+
+  if (queryTokens.length > 2 && artistInQuery >= 0.8 && titleInQuery < 0.4) {
+    score -= 22;
   }
 
   if (/\b(official|ufficiale)\b/i.test(`${video.artist} ${video.title}`)) {
@@ -300,9 +367,43 @@ function scoreYouTubeResult(video, query) {
     score -= 20;
   }
 
+  if (!searchWantsLyrics && /\b(lyrics?|testo|sub espa|sub ita|traduzione)\b/i.test(video.title)) {
+    score -= 24;
+  }
+
+  if (!searchWantsLive && /\b(live|radio italia|rilive|concerto)\b/i.test(video.title)) {
+    score -= 18;
+  }
+
+  if (/\btopic\b/i.test(video.artist)) {
+    score -= 14;
+  } else if (artistInQuery >= 0.8) {
+    score += 10;
+  }
+
   score += Math.min(Math.log10(video.playCount + 1) * 3, 24);
 
   return score;
+}
+
+function cleanYouTubeArtistText(value) {
+  return normalizeText(value)
+    .replace(/\btopic\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenCoverage(value, target) {
+  const tokens = normalizeText(value).split(/\s+/).filter(Boolean);
+
+  if (!tokens.length) {
+    return 0;
+  }
+
+  const targetTokens = new Set(normalizeText(target).split(/\s+/).filter(Boolean));
+  const matches = tokens.filter((token) => targetTokens.has(token)).length;
+
+  return matches / tokens.length;
 }
 
 function parseYouTubeTitle(value) {

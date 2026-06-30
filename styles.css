@@ -80,7 +80,7 @@ img {
 .app-shell {
   min-height: 100vh;
   padding: clamp(12px, 2vw, 20px);
-  padding-bottom: 126px;
+  padding-bottom: calc(126px + env(safe-area-inset-bottom, 0px));
 }
 
 .topbar {
@@ -899,7 +899,7 @@ h2 {
 .player {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   left: 20px;
   z-index: 20;
   display: grid;
@@ -907,10 +907,11 @@ h2 {
   gap: 22px;
   align-items: center;
   max-width: 1440px;
+  max-height: calc(100dvh - 40px - env(safe-area-inset-bottom, 0px));
   min-height: 84px;
   margin: 0 auto;
   padding: 16px 18px;
-  overflow: visible;
+  overflow: hidden;
   background: rgba(18, 18, 16, 0.48);
   border: 1px solid rgba(247, 245, 237, 0.14);
   border-radius: 8px;
@@ -1096,7 +1097,7 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 760px) {
   .app-shell {
     padding: 12px;
-    padding-bottom: 248px;
+    padding-bottom: calc(210px + env(safe-area-inset-bottom, 0px));
   }
 
   .topbar {
@@ -1153,11 +1154,12 @@ input[type="range"]::-moz-range-thumb {
 
   .player {
     right: 14px;
-    bottom: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     left: 14px;
     grid-template-columns: 1fr auto;
     gap: 12px;
     min-height: 0;
+    padding: 12px;
   }
 
   .player-track {
@@ -1177,7 +1179,7 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 420px) {
   .app-shell {
-    padding-bottom: 270px;
+    padding-bottom: calc(218px + env(safe-area-inset-bottom, 0px));
   }
 
   .brand {
@@ -1212,8 +1214,9 @@ input[type="range"]::-moz-range-thumb {
 
   .player {
     right: 10px;
-    bottom: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     left: 10px;
+    gap: 10px;
     padding: 10px;
   }
 
@@ -1231,5 +1234,62 @@ input[type="range"]::-moz-range-thumb {
     height: 48px;
     min-width: 48px;
     flex-basis: 48px;
+  }
+}
+
+@media (max-height: 480px) and (max-width: 760px) {
+  .app-shell {
+    padding-bottom: calc(142px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .player {
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    padding: 8px;
+  }
+
+  .player-track {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .player-track img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .transport {
+    gap: 6px;
+  }
+
+  .transport .icon-button {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    flex-basis: 36px;
+  }
+
+  .transport .icon-button.play {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    flex-basis: 42px;
+  }
+
+  .timeline {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 6px;
+  }
+
+  .timeline span {
+    padding: 4px 0;
+    font-size: 0.7rem;
+  }
+
+  input[type="range"] {
+    height: 18px;
   }
 }

@@ -15,13 +15,13 @@
   <body>
     <div class="app-shell">
       <header class="topbar" aria-label="Barra principale">
-        <div class="brand" aria-label="Open Music">
+        <a class="brand" href="./" aria-label="Open Music - torna alla pagina iniziale">
           <img class="brand-mark" src="assets/open-music-icon.svg" alt="" aria-hidden="true" width="44" height="44">
           <span>Open Music</span>
-        </div>
+        </a>
 
         <div class="topbar-actions">
-          <button class="icon-button search-toggle" type="button" id="searchToggle" aria-label="Apri ricerca" aria-expanded="false" data-tooltip="Cerca">
+          <button class="icon-button search-toggle tooltip-left" type="button" id="searchToggle" aria-label="Apri ricerca" aria-expanded="false" data-tooltip="Cerca">
             <span aria-hidden="true">
               <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
                 <path d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/>
@@ -39,6 +39,99 @@
               required
             >
           </form>
+
+          <div class="nav-item">
+            <button class="nav-button" type="button" id="playlistNavButton" aria-expanded="false" aria-controls="playlistDropdown">Playlist</button>
+            <div class="nav-dropdown playlist-dropdown" id="playlistDropdown" hidden>
+              <section class="playlist-pane" aria-labelledby="playlistTitle">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Raccolta</p>
+                    <h2 id="playlistTitle">Playlist</h2>
+                  </div>
+                  <button class="small-button" type="button" id="newPlaylistButton">Nuova</button>
+                </div>
+
+                <form class="inline-form" id="playlistForm" hidden>
+                  <label class="sr-only" for="playlistNameInput">Nome playlist</label>
+                  <input id="playlistNameInput" type="text" maxlength="80" placeholder="Nome playlist">
+                  <button class="small-button primary-action" type="submit">Crea</button>
+                </form>
+
+                <div class="playlist-target" id="playlistTarget" hidden>
+                  <label for="playlistSelect">Aggiungi a</label>
+                  <div>
+                    <select id="playlistSelect"></select>
+                    <button class="small-button primary-action" type="button" id="addToPlaylistButton">Aggiungi</button>
+                  </div>
+                </div>
+
+                <div class="playlist-list" id="playlistList"></div>
+                <p class="empty-note" id="playlistEmpty">Accedi e crea la tua prima playlist.</p>
+                <button class="small-button nav-wide-action" type="button" id="viewAllPlaylistsButton">Visualizza tutte le playlist</button>
+              </section>
+            </div>
+          </div>
+
+          <div class="nav-item">
+            <button class="nav-button" type="button" id="accountNavButton" aria-expanded="false" aria-controls="accountDropdown">Account</button>
+            <div class="nav-dropdown account-dropdown" id="accountDropdown" hidden>
+              <section class="account-pane" aria-labelledby="accountTitle">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Profilo</p>
+                    <h2 id="accountTitle">Account</h2>
+                  </div>
+                  <button class="small-button" type="button" id="logoutButton" hidden>Esci</button>
+                </div>
+
+                <div class="auth-status" id="authStatus">Accesso non effettuato.</div>
+
+                <div class="auth-forms" id="authForms">
+                  <div class="auth-switch" role="tablist" aria-label="Account">
+                    <button class="tab active" type="button" id="loginModeButton">Accedi</button>
+                    <button class="tab" type="button" id="registerModeButton">Registrati</button>
+                  </div>
+
+                  <form class="auth-form active" id="loginForm">
+                    <label for="loginIdentifier">Email o username</label>
+                    <input id="loginIdentifier" name="identifier" type="text" autocomplete="username" required>
+                    <label for="loginPassword">Password</label>
+                    <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                    <button class="small-button primary-action" type="submit">Accedi</button>
+                    <button class="text-link" type="button" id="forgotPasswordButton">Password dimenticata</button>
+                  </form>
+
+                  <form class="auth-form" id="registerForm">
+                    <label for="registerName">Nome</label>
+                    <input id="registerName" name="displayName" type="text" autocomplete="name" maxlength="60" required>
+                    <label for="registerUsername">Username</label>
+                    <input id="registerUsername" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9._]{3,24}" required>
+                    <p class="form-note">3-24 caratteri: lettere, numeri, punto o underscore.</p>
+                    <label for="registerEmail">Email</label>
+                    <input id="registerEmail" name="email" type="email" autocomplete="email" required>
+                    <label for="registerPassword">Password</label>
+                    <input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+                    <p class="form-note">Minimo 8 caratteri. Evita password gia' usate o comuni.</p>
+                    <button class="small-button primary-action" type="submit">Crea account</button>
+                  </form>
+
+                  <form class="auth-form" id="forgotForm">
+                    <label for="forgotEmail">Email</label>
+                    <input id="forgotEmail" name="email" type="email" autocomplete="email" required>
+                    <button class="small-button primary-action" type="submit">Invia link</button>
+                    <button class="text-link" type="button" id="backToLoginButton">Torna al login</button>
+                  </form>
+
+                  <form class="auth-form" id="resetForm" hidden>
+                    <label for="resetPassword">Nuova password</label>
+                    <input id="resetPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+                    <button class="small-button primary-action" type="submit">Aggiorna password</button>
+                  </form>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -117,87 +210,32 @@
             <div class="mini-list" id="queueList"></div>
             <p class="empty-note" id="queueEmpty">La coda e' vuota.</p>
           </section>
-
-          <section class="playlist-pane" aria-labelledby="playlistTitle">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Raccolta</p>
-                <h2 id="playlistTitle">Playlist</h2>
-              </div>
-              <button class="small-button" type="button" id="newPlaylistButton">Nuova</button>
-            </div>
-
-            <form class="inline-form" id="playlistForm" hidden>
-              <label class="sr-only" for="playlistNameInput">Nome playlist</label>
-              <input id="playlistNameInput" type="text" maxlength="80" placeholder="Nome playlist">
-              <button class="small-button primary-action" type="submit">Crea</button>
-            </form>
-
-            <div class="playlist-target" id="playlistTarget" hidden>
-              <label for="playlistSelect">Aggiungi a</label>
-              <div>
-                <select id="playlistSelect"></select>
-                <button class="small-button primary-action" type="button" id="addToPlaylistButton">Aggiungi</button>
-              </div>
-            </div>
-
-            <div class="playlist-list" id="playlistList"></div>
-            <p class="empty-note" id="playlistEmpty">Accedi e crea la tua prima playlist.</p>
-          </section>
-
-          <section class="account-pane" aria-labelledby="accountTitle">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Profilo</p>
-                <h2 id="accountTitle">Account</h2>
-              </div>
-              <button class="small-button" type="button" id="logoutButton" hidden>Esci</button>
-            </div>
-
-            <div class="auth-status" id="authStatus">Accesso non effettuato.</div>
-
-            <div class="auth-forms" id="authForms">
-              <div class="auth-switch" role="tablist" aria-label="Account">
-                <button class="tab active" type="button" id="loginModeButton">Accedi</button>
-                <button class="tab" type="button" id="registerModeButton">Registrati</button>
-              </div>
-
-              <form class="auth-form active" id="loginForm">
-                <label for="loginEmail">Email</label>
-                <input id="loginEmail" name="email" type="email" autocomplete="email" required>
-                <label for="loginPassword">Password</label>
-                <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
-                <button class="small-button primary-action" type="submit">Accedi</button>
-                <button class="text-link" type="button" id="forgotPasswordButton">Password dimenticata</button>
-              </form>
-
-              <form class="auth-form" id="registerForm">
-                <label for="registerName">Nome</label>
-                <input id="registerName" name="displayName" type="text" autocomplete="name" maxlength="60" required>
-                <label for="registerEmail">Email</label>
-                <input id="registerEmail" name="email" type="email" autocomplete="email" required>
-                <label for="registerPassword">Password</label>
-                <input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
-                <p class="form-note">Minimo 15 caratteri. Evita password gia' usate o comuni.</p>
-                <button class="small-button primary-action" type="submit">Crea account</button>
-              </form>
-
-              <form class="auth-form" id="forgotForm">
-                <label for="forgotEmail">Email</label>
-                <input id="forgotEmail" name="email" type="email" autocomplete="email" required>
-                <button class="small-button primary-action" type="submit">Invia link</button>
-                <button class="text-link" type="button" id="backToLoginButton">Torna al login</button>
-              </form>
-
-              <form class="auth-form" id="resetForm" hidden>
-                <label for="resetPassword">Nuova password</label>
-                <input id="resetPassword" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
-                <button class="small-button primary-action" type="submit">Aggiorna password</button>
-              </form>
-            </div>
-          </section>
         </aside>
       </main>
+
+      <section class="playlist-overlay" id="playlistOverlay" role="dialog" aria-modal="true" aria-labelledby="playlistOverlayTitle" hidden>
+        <div class="playlist-overlay-backdrop" id="playlistOverlayBackdrop"></div>
+        <div class="playlist-overlay-panel">
+          <div class="overlay-heading">
+            <div>
+              <p class="eyebrow">Playlist</p>
+              <h2 id="playlistOverlayTitle">Tutte le playlist</h2>
+              <p id="playlistOverlayMeta">La tua raccolta privata.</p>
+            </div>
+            <div class="overlay-actions">
+              <button class="small-button" type="button" id="playlistOverlayBackButton" hidden>Indietro</button>
+              <button class="icon-button tooltip-left" type="button" id="closePlaylistOverlayButton" aria-label="Chiudi playlist" data-tooltip="Chiudi">
+                <span aria-hidden="true">
+                  <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
+                    <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/>
+                  </svg>
+                </span>
+              </button>
+            </div>
+          </div>
+          <div class="playlist-overlay-list" id="playlistOverlayList"></div>
+        </div>
+      </section>
 
       <footer class="player" aria-label="Controlli player">
         <audio id="audio" preload="metadata"></audio>
@@ -247,6 +285,14 @@
           <input id="volumeRange" type="range" min="0" max="1" value="0.8" step="0.01">
         </div>
       </footer>
+
+      <div class="credit-widget" id="creditWidget">
+        <div class="credit-panel" id="creditPanel" hidden>
+          <span>Web App Realizzata da Stefano Catalin D'Alessandro</span>
+          <a href="https://github.com/StefaDale" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+        <button class="credit-toggle" type="button" id="creditToggle" aria-expanded="false" aria-label="Crediti">i</button>
+      </div>
     </div>
 
     <script src="config.js"></script>

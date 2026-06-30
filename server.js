@@ -23,7 +23,7 @@ const EMAILJS_RESET_TEMPLATE_ID = process.env.EMAILJS_RESET_TEMPLATE_ID || "";
 const AUDIUS_API_ROOT = "https://api.audius.co/v1";
 const YOUTUBE_API_ROOT = "https://www.googleapis.com/youtube/v3";
 const EMAILJS_API_ROOT = "https://api.emailjs.com/api/v1.0/email/send";
-const PASSWORD_MIN_LENGTH = 15;
+const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 const TOKEN_BYTES = 32;
 const SESSION_DAYS = 30;
@@ -187,11 +187,17 @@ async function handleRegister(req, res) {
 
   const body = await readJsonBody(req);
   const email = normalizeEmail(body.email);
+  const username = normalizeUsername(body.username);
   const displayName = normalizeDisplayName(body.displayName);
   const password = String(body.password || "");
 
-  if (!email || !displayName || !password) {
-    sendJson(res, { error: "Email, nome e password sono obbligatori." }, 400);
+  if (!email || !username || !displayName || !password) {
+    sendJson(res, { error: "Nome, username, email e password sono obbligatori." }, 400);
+    return;
+  }
+
+  if (!isValidUsername(username)) {
+    sendJson(res, { error: "Username non valido. Usa 3-24 caratteri: lettere, numeri, punto o underscore." }, 400);
     return;
   }
 
@@ -202,9 +208,18 @@ async function handleRegister(req, res) {
   }
 
   await ensureSchema();
-  const existing = await query("SELECT id, email_verified_at FROM users WHERE email = $1", [email]);
-  if (existing.rowCount) {
-    const existingUser = existing.rows[0];
+  const existing = await query(
+    "SELECT id, email, username, email_verified_at FROM users WHERE email = $1 OR username = $2",
+    [email, username],
+  );
+  const existingUsername = existing.rows.find((row) => row.username === username && row.email !== email);
+  if (existingUsername) {
+    sendJson(res, { error: "Username gia' in uso. Scegline un altro." }, 409);
+    return;
+  }
+
+  const existingUser = existing.rows.find((row) => row.email === email);
+  if (existingUser) {
     if (existingUser.email_verified_at) {
       sendJson(res, {
         error: "Email gia' registrata. Accedi con il tuo account o usa il reset password.",
@@ -212,6 +227,10 @@ async function handleRegister(req, res) {
       return;
     }
 
+    await query(
+      "UPDATE users SET username = $1, display_name = $2, updated_at = now() WHERE id = $3",
+      [username, displayName, existingUser.id],
+    );
     const token = await createAuthToken(existingUser.id, "verify_email", VERIFY_HOURS * 60);
     const emailSent = await sendActionEmailSafely(res, {
       templateId: EMAILJS_VERIFY_TEMPLATE_ID,
@@ -232,9 +251,9 @@ async function handleRegister(req, res) {
   const userId = crypto.randomUUID();
   const passwordHash = await hashPassword(password);
   await query(
-    `INSERT INTO users (id, email, display_name, password_hash)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, email, displayName, passwordHash],
+    `INSERT INTO users (id, email, username, display_name, password_hash)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, email, username, displayName, passwordHash],
   );
   const token = await createAuthToken(userId, "verify_email", VERIFY_HOURS * 60);
   const emailSent = await sendActionEmailSafely(res, {
@@ -280,11 +299,11 @@ async function handleLogin(req, res) {
   }
 
   const body = await readJsonBody(req);
-  const email = normalizeEmail(body.email);
+  const identifier = normalizeLoginIdentifier(body.identifier || body.email);
   const password = String(body.password || "");
 
-  if (!email) {
-    sendJson(res, { error: "Inserisci un'email valida." }, 400);
+  if (!identifier) {
+    sendJson(res, { error: "Inserisci email o username." }, 400);
     return;
   }
 
@@ -294,7 +313,22 @@ async function handleLogin(req, res) {
   }
 
   await ensureSchema();
-  const result = await query("SELECT * FROM users WHERE email = $1", [email]);
+  let result;
+  if (identifier.includes("@")) {
+    const email = normalizeEmail(identifier);
+    if (!email) {
+      sendJson(res, { error: "Inserisci un'email valida." }, 400);
+      return;
+    }
+    result = await query("SELECT * FROM users WHERE email = $1", [email]);
+  } else {
+    const username = normalizeUsername(identifier);
+    if (!isValidUsername(username)) {
+      sendJson(res, { error: "Username non valido." }, 400);
+      return;
+    }
+    result = await query("SELECT * FROM users WHERE username = $1", [username]);
+  }
   const user = result.rows[0];
 
   if (!user) {
@@ -971,6 +1005,7 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS users (
       id text PRIMARY KEY,
       email text NOT NULL UNIQUE,
+      username text,
       display_name text NOT NULL,
       password_hash text NOT NULL,
       email_verified_at timestamptz,
@@ -1025,6 +1060,29 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS playlist_tracks_playlist_idx
       ON playlist_tracks (playlist_id, position, created_at);
   `);
+
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username text");
+  await pool.query(`
+    WITH candidates AS (
+      SELECT
+        id,
+        regexp_replace(lower(split_part(email, '@', 1)), '[^a-z0-9._]', '', 'g') AS base
+      FROM users
+      WHERE username IS NULL OR username = ''
+    )
+    UPDATE users
+    SET username = left(
+      CASE
+        WHEN length(candidates.base) >= 3 THEN left(candidates.base, 15) || '_' || left(replace(users.id, '-', ''), 8)
+        ELSE 'user_' || left(replace(users.id, '-', ''), 12)
+      END,
+      24
+    )
+    FROM candidates
+    WHERE users.id = candidates.id
+  `);
+  await pool.query("ALTER TABLE users ALTER COLUMN username SET NOT NULL");
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
   schemaReady = true;
 }
 
@@ -1078,6 +1136,18 @@ async function readJsonBody(req) {
 function normalizeEmail(value) {
   const email = String(value || "").trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254 ? email : "";
+}
+
+function normalizeLoginIdentifier(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidUsername(username) {
+  return /^[a-z0-9._]{3,24}$/.test(username) && !/^[._]+$/.test(username);
 }
 
 function normalizeDisplayName(value) {
@@ -1259,6 +1329,7 @@ function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
+    username: user.username,
     displayName: user.display_name,
     emailVerified: Boolean(user.email_verified_at),
   };

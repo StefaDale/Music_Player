@@ -15,7 +15,7 @@
 | **Frontend produzione** | `https://stefadale.github.io/Music_Player/` |
 | **Backend produzione** | `https://music-player-2mhu.onrender.com` |
 | **Hosting** | GitHub Pages per frontend statico; Render per backend Node; Neon per database Postgres |
-| **Stato attuale** | UI modernizzata, ricerca espandibile da icona, account, conferma email, reset password e playlist private implementati nel codice. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
+| **Stato attuale** | UI modernizzata con navbar, ricerca espandibile da icona, dropdown account/playlist, conferma email, reset password e playlist private implementati nel codice. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
 
 ---
 
@@ -38,7 +38,7 @@
 
 ```text
 Deezer/
-|-- index.html             # UI: topbar, ricerca espandibile, risultati, player, testi, coda, playlist, account
+|-- index.html             # UI: navbar, ricerca espandibile, risultati, player, testi, coda, dropdown playlist/account
 |-- styles.css             # Tema music app dark, responsive, animazioni mirate e pannelli UI
 |-- app.js                 # Frontend: ricerca, player, auth, sessionStorage, playlist, coda locale, lyrics
 |-- config.js              # API_BASE_URL per frontend non-localhost
@@ -181,7 +181,7 @@ Content-Type, Authorization
 |---|---|---|
 | `/api/auth/register` | POST | Crea utente e invia email conferma |
 | `/api/auth/verify?token=...` | GET | Conferma account |
-| `/api/auth/login` | POST | Login con email/password |
+| `/api/auth/login` | POST | Login con email o username + password |
 | `/api/auth/logout` | POST | Elimina sessione corrente |
 | `/api/auth/me` | GET | Utente corrente |
 | `/api/auth/password/forgot` | POST | Invia link reset con risposta generica |
@@ -215,13 +215,14 @@ Con `DATABASE_URL` configurato, il backend crea automaticamente:
 - `playlist_tracks`
 
 Le playlist sono private e legate a `user_id`.
+In `users`, `display_name` e' il nome libero/duplicabile, mentre `username` e' unico e usabile per il login.
 
 ### Sicurezza Auth
 
 - Password hashate con `crypto.scrypt`.
 - Salt unico per utente.
 - `PASSWORD_PEPPER` obbligatorio lato server.
-- Password minime: 15 caratteri; max 128.
+- Password minime: 8 caratteri; max 128.
 - Blocco password comuni locale.
 - Check Have I Been Pwned k-anonymity best effort.
 - Token verifica/reset/sessione salvati solo come hash SHA-256.
@@ -305,7 +306,7 @@ Playlist e account non vengono salvati in `localStorage`; arrivano dal backend.
 - Menu traccia: `Riproduci`, `Aggiungi alla coda`, `Aggiungi a playlist`, `Apri sorgente`.
 - Se non loggato, `Aggiungi a playlist` porta al login.
 - Se loggato ma senza playlist, apre il form nuova playlist.
-- Le playlist mostrano fino a 6 brani nel pannello.
+- Il dropdown playlist mostra le 4 playlist piu' recenti; l'overlay mostra lista completa e dettaglio playlist.
 
 ---
 

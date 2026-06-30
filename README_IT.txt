@@ -8,7 +8,7 @@ Player musicale con catalogo ibrido, testi, coda locale, account privato e playl
 - riproduzione tramite YouTube IFrame Player o stream Audius
 - testi via LRCLIB quando disponibili
 - coda locale del dispositivo
-- account con email confermata
+- account con email confermata e login tramite email o username
 - password hashate con `scrypt`, salt per utente e pepper lato server
 - reset password con token monouso
 - playlist private salvate su Neon Postgres
@@ -95,6 +95,7 @@ EMAILJS_RESET_TEMPLATE_ID=
 6. Lascia `DATABASE_SSL=true`.
 
 Il backend crea automaticamente le tabelle `users`, `auth_tokens`, `sessions`, `playlists` e `playlist_tracks` al primo uso.
+La tabella `users` contiene sia `display_name`, libero e duplicabile, sia `username`, unico e usabile per accedere velocemente.
 
 ## Setup EmailJS
 
@@ -166,7 +167,7 @@ window.APP_CONFIG = {
 ## Sicurezza account
 
 - Le password non vengono mai salvate in chiaro.
-- La policy richiede almeno 15 caratteri e rifiuta password comuni o presenti in violazioni note quando Have I Been Pwned risponde.
+- La policy richiede almeno 8 caratteri e rifiuta password comuni o presenti in violazioni note quando Have I Been Pwned risponde.
 - I token di sessione, verifica email e reset password sono salvati solo hashati nel database.
 - Le sessioni frontend sono in `sessionStorage` e vengono inviate con `Authorization: Bearer`.
 - I link email scadono: 24 ore per conferma account, 30 minuti per reset password.

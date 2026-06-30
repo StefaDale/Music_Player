@@ -24,6 +24,10 @@ const state = {
   accountsConfigured: false,
   youtubeConfigured: false,
   searchOpen: false,
+  activeDropdown: "",
+  playlistOverlayOpen: false,
+  playlistOverlayId: "",
+  creditOpen: false,
   authMode: "login",
   authMessage: "",
   authMessageTone: "neutral",
@@ -48,6 +52,10 @@ let youtubeProgressTimer = null;
 
 const els = {
   audio: document.getElementById("audio"),
+  playlistNavButton: document.getElementById("playlistNavButton"),
+  playlistDropdown: document.getElementById("playlistDropdown"),
+  accountNavButton: document.getElementById("accountNavButton"),
+  accountDropdown: document.getElementById("accountDropdown"),
   searchToggle: document.getElementById("searchToggle"),
   searchForm: document.getElementById("searchForm"),
   searchInput: document.getElementById("searchInput"),
@@ -83,6 +91,14 @@ const els = {
   addToPlaylistButton: document.getElementById("addToPlaylistButton"),
   playlistList: document.getElementById("playlistList"),
   playlistEmpty: document.getElementById("playlistEmpty"),
+  viewAllPlaylistsButton: document.getElementById("viewAllPlaylistsButton"),
+  playlistOverlay: document.getElementById("playlistOverlay"),
+  playlistOverlayBackdrop: document.getElementById("playlistOverlayBackdrop"),
+  playlistOverlayTitle: document.getElementById("playlistOverlayTitle"),
+  playlistOverlayMeta: document.getElementById("playlistOverlayMeta"),
+  playlistOverlayBackButton: document.getElementById("playlistOverlayBackButton"),
+  closePlaylistOverlayButton: document.getElementById("closePlaylistOverlayButton"),
+  playlistOverlayList: document.getElementById("playlistOverlayList"),
   authStatus: document.getElementById("authStatus"),
   authForms: document.getElementById("authForms"),
   loginModeButton: document.getElementById("loginModeButton"),
@@ -94,6 +110,8 @@ const els = {
   forgotPasswordButton: document.getElementById("forgotPasswordButton"),
   backToLoginButton: document.getElementById("backToLoginButton"),
   logoutButton: document.getElementById("logoutButton"),
+  creditToggle: document.getElementById("creditToggle"),
+  creditPanel: document.getElementById("creditPanel"),
 };
 
 async function init() {
@@ -110,6 +128,16 @@ async function init() {
 function bindEvents() {
   els.searchToggle.addEventListener("click", () => {
     setSearchOpen(!state.searchOpen, { focus: true });
+  });
+
+  els.playlistNavButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNavDropdown("playlist");
+  });
+
+  els.accountNavButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNavDropdown("account");
   });
 
   els.searchForm.addEventListener("submit", (event) => {
@@ -130,11 +158,22 @@ function bindEvents() {
     if (!event.target.closest(".track-menu")) {
       closeTrackMenus();
     }
+    if (!event.target.closest(".nav-item")) {
+      closeNavDropdowns();
+    }
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeTrackMenus();
+      if (state.playlistOverlayOpen) {
+        closePlaylistOverlay();
+        return;
+      }
+      if (state.activeDropdown) {
+        closeNavDropdowns();
+        return;
+      }
       if (state.searchOpen) {
         setSearchOpen(false, { focusToggle: true });
       }
@@ -189,6 +228,10 @@ function bindEvents() {
 
   els.playlistForm.addEventListener("submit", handleCreatePlaylist);
   els.addToPlaylistButton.addEventListener("click", handleAddSelectedTrackToPlaylist);
+  els.viewAllPlaylistsButton.addEventListener("click", () => openPlaylistOverlay());
+  els.closePlaylistOverlayButton.addEventListener("click", closePlaylistOverlay);
+  els.playlistOverlayBackdrop.addEventListener("click", closePlaylistOverlay);
+  els.playlistOverlayBackButton.addEventListener("click", showPlaylistOverlayList);
   els.loginModeButton.addEventListener("click", () => setAuthMode("login"));
   els.registerModeButton.addEventListener("click", () => setAuthMode("register"));
   els.forgotPasswordButton.addEventListener("click", () => setAuthMode("forgot"));
@@ -198,6 +241,10 @@ function bindEvents() {
   els.forgotForm.addEventListener("submit", handleForgotPassword);
   els.resetForm.addEventListener("submit", handleResetPassword);
   els.logoutButton.addEventListener("click", handleLogout);
+  els.creditToggle.addEventListener("click", () => {
+    state.creditOpen = !state.creditOpen;
+    renderCredit();
+  });
 
   els.audio.volume = Number(els.volumeRange.value);
   updateRangeProgress(els.volumeRange);
@@ -346,6 +393,8 @@ function renderAll() {
   renderAccount();
   renderLyrics();
   renderSearch();
+  renderNavDropdowns();
+  renderCredit();
 }
 
 function renderResults() {
@@ -560,38 +609,42 @@ function renderPlaylists() {
   els.playlistSelect.innerHTML = state.playlists
     .map((playlist) => `<option value="${escapeAttribute(playlist.id)}">${escapeHtml(playlist.name)}</option>`)
     .join("");
+  els.viewAllPlaylistsButton.hidden = false;
 
   if (!state.user) {
     els.playlistEmpty.textContent = "Accedi per salvare playlist private.";
     els.playlistEmpty.hidden = false;
+    renderPlaylistOverlay();
     return;
   }
 
   if (!state.playlists.length) {
     els.playlistEmpty.textContent = "Crea una playlist per iniziare.";
     els.playlistEmpty.hidden = false;
+    renderPlaylistOverlay();
     return;
   }
 
   els.playlistEmpty.hidden = true;
-  state.playlists.forEach((playlist) => {
+  state.playlists.slice(0, 4).forEach((playlist) => {
     const article = document.createElement("article");
-    article.className = "playlist-card";
+    article.className = "playlist-card compact-playlist-card";
     article.innerHTML = `
       <div class="playlist-card-heading">
-        <div>
+        <button class="playlist-open text-button" type="button">
           <h3>${escapeHtml(playlist.name)}</h3>
           <p>${playlist.tracks.length} brani</p>
-        </div>
+        </button>
         <button class="icon-button" type="button" aria-label="Elimina ${escapeAttribute(playlist.name)}" data-tooltip="Elimina">
           <span aria-hidden="true">${iconSvg("remove")}</span>
         </button>
       </div>
       <div class="mini-list"></div>
     `;
+    article.querySelector(".playlist-open").addEventListener("click", () => openPlaylistOverlay(playlist.id));
     article.querySelector(".icon-button").addEventListener("click", () => deletePlaylist(playlist.id));
     const list = article.querySelector(".mini-list");
-    playlist.tracks.slice(0, 6).forEach((entry) => {
+    playlist.tracks.slice(0, 2).forEach((entry) => {
       list.appendChild(createMiniTrack(entry.track, {
         actionLabel: "Rimuovi dalla playlist",
         actionIcon: iconSvg("remove"),
@@ -607,6 +660,83 @@ function renderPlaylists() {
     }
     els.playlistList.appendChild(article);
   });
+  renderPlaylistOverlay();
+}
+
+function renderPlaylistOverlay() {
+  els.playlistOverlay.hidden = !state.playlistOverlayOpen;
+  if (!state.playlistOverlayOpen) {
+    return;
+  }
+
+  const selectedPlaylist = state.playlists.find((playlist) => playlist.id === state.playlistOverlayId);
+  els.playlistOverlayList.innerHTML = "";
+  els.playlistOverlayBackButton.hidden = !selectedPlaylist;
+
+  if (!state.user) {
+    els.playlistOverlayTitle.textContent = "Playlist";
+    els.playlistOverlayMeta.textContent = "Accedi per vedere le tue playlist private.";
+    els.playlistOverlayList.innerHTML = '<p class="empty-note">Account richiesto.</p>';
+    return;
+  }
+
+  if (selectedPlaylist) {
+    renderPlaylistOverlayDetail(selectedPlaylist);
+    return;
+  }
+
+  els.playlistOverlayTitle.textContent = "Tutte le playlist";
+  els.playlistOverlayMeta.textContent = `${state.playlists.length} playlist private`;
+
+  if (!state.playlists.length) {
+    els.playlistOverlayList.innerHTML = '<p class="empty-note">Crea una playlist dal menu in alto.</p>';
+    return;
+  }
+
+  state.playlists.forEach((playlist) => {
+    const button = document.createElement("button");
+    button.className = "overlay-playlist-card";
+    button.type = "button";
+    button.innerHTML = `
+      <span>
+        <strong>${escapeHtml(playlist.name)}</strong>
+        <small>${playlist.tracks.length} brani</small>
+      </span>
+      <span aria-hidden="true">Apri</span>
+    `;
+    button.addEventListener("click", () => showPlaylistDetail(playlist.id));
+    els.playlistOverlayList.appendChild(button);
+  });
+}
+
+function renderPlaylistOverlayDetail(playlist) {
+  els.playlistOverlayTitle.textContent = playlist.name;
+  els.playlistOverlayMeta.textContent = `${playlist.tracks.length} brani salvati`;
+
+  const actions = document.createElement("div");
+  actions.className = "overlay-detail-actions";
+  actions.innerHTML = `
+    <button class="small-button danger-action" type="button">Elimina playlist</button>
+  `;
+  actions.querySelector("button").addEventListener("click", () => deletePlaylist(playlist.id));
+  els.playlistOverlayList.appendChild(actions);
+
+  if (!playlist.tracks.length) {
+    els.playlistOverlayList.insertAdjacentHTML("beforeend", '<p class="empty-note">Nessun brano salvato in questa playlist.</p>');
+    return;
+  }
+
+  const list = document.createElement("div");
+  list.className = "mini-list overlay-track-list";
+  playlist.tracks.forEach((entry) => {
+    list.appendChild(createMiniTrack(entry.track, {
+      actionLabel: "Rimuovi dalla playlist",
+      actionIcon: iconSvg("remove"),
+      onPlay: () => playTrack(entry.track),
+      onAction: () => removeTrackFromPlaylist(playlist.id, entry.id),
+    }));
+  });
+  els.playlistOverlayList.appendChild(list);
 }
 
 function renderAccount() {
@@ -621,7 +751,8 @@ function renderAccount() {
   } else if (!state.accountsConfigured) {
     els.authStatus.textContent = "Account non ancora configurati sul backend.";
   } else if (state.user) {
-    els.authStatus.textContent = `Ciao ${state.user.displayName}. Playlist sincronizzate e private.`;
+    const usernameLabel = state.user.username ? ` (@${state.user.username})` : "";
+    els.authStatus.textContent = `Ciao ${state.user.displayName}${usernameLabel}. Playlist sincronizzate e private.`;
   } else {
     els.authStatus.textContent = "Accedi per salvare playlist private.";
   }
@@ -1089,10 +1220,14 @@ function selectTrackForPlaylist(track) {
   if (!state.user) {
     setMessage("Accedi per salvare brani nelle playlist.");
     setAuthMode("login");
+    state.activeDropdown = "account";
+    renderNavDropdowns();
     return;
   }
 
   state.selectedTrackForPlaylist = track;
+  state.activeDropdown = "playlist";
+  renderNavDropdowns();
   if (!state.playlists.length) {
     els.playlistForm.hidden = false;
     els.playlistNameInput.focus();
@@ -1165,6 +1300,9 @@ async function deletePlaylist(playlistId) {
   try {
     await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}`, { method: "DELETE" });
     state.playlists = state.playlists.filter((playlist) => playlist.id !== playlistId);
+    if (state.playlistOverlayId === playlistId) {
+      state.playlistOverlayId = "";
+    }
     renderPlaylists();
   } catch (error) {
     setMessage(error.message);
@@ -1187,8 +1325,65 @@ async function loadPlaylists() {
   }
 }
 
+function toggleNavDropdown(name) {
+  state.activeDropdown = state.activeDropdown === name ? "" : name;
+  if (state.activeDropdown) {
+    state.searchOpen = false;
+  }
+  renderSearch();
+  renderNavDropdowns();
+}
+
+function closeNavDropdowns() {
+  if (!state.activeDropdown) {
+    return;
+  }
+  state.activeDropdown = "";
+  renderNavDropdowns();
+}
+
+function renderNavDropdowns() {
+  const playlistOpen = state.activeDropdown === "playlist";
+  const accountOpen = state.activeDropdown === "account";
+  els.playlistDropdown.hidden = !playlistOpen;
+  els.accountDropdown.hidden = !accountOpen;
+  els.playlistNavButton.setAttribute("aria-expanded", String(playlistOpen));
+  els.accountNavButton.setAttribute("aria-expanded", String(accountOpen));
+}
+
+function openPlaylistOverlay(playlistId = "") {
+  state.playlistOverlayOpen = true;
+  state.playlistOverlayId = playlistId;
+  closeNavDropdowns();
+  renderPlaylistOverlay();
+}
+
+function closePlaylistOverlay() {
+  state.playlistOverlayOpen = false;
+  state.playlistOverlayId = "";
+  renderPlaylistOverlay();
+}
+
+function showPlaylistOverlayList() {
+  state.playlistOverlayId = "";
+  renderPlaylistOverlay();
+}
+
+function showPlaylistDetail(playlistId) {
+  state.playlistOverlayId = playlistId;
+  renderPlaylistOverlay();
+}
+
+function renderCredit() {
+  els.creditPanel.hidden = !state.creditOpen;
+  els.creditToggle.setAttribute("aria-expanded", String(state.creditOpen));
+}
+
 function setSearchOpen(open, options = {}) {
   state.searchOpen = open;
+  if (open) {
+    closeNavDropdowns();
+  }
   renderSearch();
   if (open && options.focus) {
     window.setTimeout(() => els.searchInput.focus(), 180);
@@ -1281,7 +1476,7 @@ async function handleLogin(event) {
     const data = await fetchJson("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        email: form.get("email") || els.loginForm.querySelector("#loginEmail").value,
+        identifier: form.get("identifier") || els.loginForm.querySelector("#loginIdentifier").value,
         password: form.get("password") || els.loginForm.querySelector("#loginPassword").value,
       }),
     });
@@ -1310,6 +1505,7 @@ async function handleRegister(event) {
       method: "POST",
       body: JSON.stringify({
         displayName: form.get("displayName"),
+        username: form.get("username"),
         email: form.get("email"),
         password: form.get("password"),
       }),
@@ -1381,11 +1577,15 @@ async function handleLogout() {
   state.user = null;
   state.playlists = [];
   state.selectedTrackForPlaylist = null;
+  state.playlistOverlayOpen = false;
+  state.playlistOverlayId = "";
+  state.activeDropdown = "";
   sessionStorage.removeItem("open-music-session");
   state.authMessage = "";
   state.authMessageTone = "neutral";
   renderAccount();
   renderPlaylists();
+  renderNavDropdowns();
   setMessage("Logout completato.");
 }
 

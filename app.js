@@ -273,8 +273,10 @@ function resolveApiUrl(url) {
 }
 
 function getApiBaseUrl() {
+  const isNativeShell = window.Capacitor?.isNativePlatform?.()
+    || window.location.protocol === "capacitor:";
   const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  if (localHosts.has(window.location.hostname)) {
+  if (!isNativeShell && localHosts.has(window.location.hostname)) {
     return "";
   }
 

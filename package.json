@@ -5,9 +5,19 @@
   "description": "Player musicale gratuito con Audius e testi LRCLIB.",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check app.js && node --check server.js"
+    "check": "node --check app.js && node --check server.js && node --check scripts/prepare-capacitor.js",
+    "build:android-web": "node scripts/prepare-capacitor.js",
+    "cap:sync:android": "npm run build:android-web && npx cap sync android",
+    "cap:open:android": "npm run cap:sync:android && npx cap open android"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.1"
   }
 }

@@ -19,7 +19,7 @@ It cannot legally provide Spotify's full commercial catalog for free. That requi
 
 ## YouTube For The Mainstream Catalog
 
-To search Fabri Fibra and other commercial artists inside the app, you need a free YouTube Data API key:
+To search commercial artists inside the app, you need a free YouTube Data API key:
 
 1. Go to https://console.cloud.google.com/.
 2. Create or select a project.

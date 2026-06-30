@@ -19,7 +19,7 @@ Non puo' avere il catalogo commerciale completo di Spotify gratis e legalmente: 
 
 ## YouTube per il catalogo mainstream
 
-Per cercare Fabri Fibra e altri artisti commerciali dentro l'app serve una chiave gratuita della YouTube Data API:
+Per cercare artisti commerciali dentro l'app serve una chiave gratuita della YouTube Data API:
 
 1. Vai su https://console.cloud.google.com/.
 2. Crea o seleziona un progetto.

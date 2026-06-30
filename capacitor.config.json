@@ -1,0 +1,8 @@
+{
+  "appId": "com.stefadale.openmusicplayer",
+  "appName": "Open Music Player",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

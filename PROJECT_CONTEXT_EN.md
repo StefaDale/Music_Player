@@ -1,6 +1,7 @@
 # PROJECT_CONTEXT_EN.md
 
-> Context document to allow any AI or developer to resume the project without extra explanation. Last update: June 2026.
+> Context document so any AI or developer can resume the project without extra explanation.
+> Last update: June 30, 2026.
 
 ---
 
@@ -8,63 +9,88 @@
 
 | Field | Detail |
 |---|---|
-| **Name** | Open Music Player |
-| **Type** | Music web application with a static frontend and a Node.js backend |
-| **Main purpose** | Provide a Spotify-like experience using accessible sources: YouTube for mainstream music, Audius as a free fallback, and LRCLIB for lyrics |
+| **Product name** | Open Music Player |
+| **Repository/workspace** | `C:\Code\Web\Deezer` |
+| **Type** | Music web application with a static frontend, native Node.js backend, and Capacitor Android shell |
+| **Main purpose** | Provide a Spotify-like music player using accessible sources: YouTube for mainstream catalog search when an API key is available, Audius as a free catalog/fallback, and LRCLIB for lyrics |
 | **Production frontend** | `https://stefadale.github.io/Music_Player/` |
 | **Production backend** | `https://music-player-2mhu.onrender.com` |
-| **Hosting** | GitHub Pages for the frontend, Render for the backend |
-| **Current status** | Working online. The GitHub Pages frontend calls the Render backend through `config.js`; Render exposes the APIs, uses the YouTube key as an environment variable, and enables CORS for `https://stefadale.github.io`. |
+| **Expected hosting** | GitHub Pages for the static frontend, Render for the Node.js backend |
+| **Current status** | Working online according to the repository configuration. `config.js` points to the Render backend; the backend exposes JSON APIs, also serves static files locally/on Render, uses `YOUTUBE_API_KEY` only server-side, and allows CORS through `CORS_ORIGIN` or `*` by default. |
 
 ---
 
 ## Technologies Used
 
-### Languages
+### Runtime And Languages
 
-- **HTML5** for the application structure
-- **CSS3** for responsive layout, player UI, panels, and visual states
-- **Vanilla JavaScript** for interactions, search, player logic, queue, favorites, and lyrics
-- **Node.js** for the HTTP backend without external frameworks
+- **HTML5** for the application structure.
+- **CSS3** for responsive layout, panels, fixed player, menus, tooltips, and visual states.
+- **Vanilla JavaScript** in the frontend; there are no frameworks or bundlers.
+- **Node.js >= 18** in the backend; it relies on global `fetch` and has no external npm dependencies.
+- **Node native HTTP module** for API routing and static file serving.
+- **Capacitor** to generate an installable Android app from the static frontend.
 
 ### APIs And External Services
 
-- **YouTube Data API v3** to search mainstream music videos
-- **YouTube IFrame Player API** to play videos in the frontend
-- **Audius API** for fallback search and streaming
-- **LRCLIB API** for synchronized or plain lyrics
-- **GitHub Pages** to publish the static frontend
-- **Render** to run the Node.js backend
-- **ngrok** used only for temporary online simulation and testing
+- **YouTube Data API v3**: searches music videos when `YOUTUBE_API_KEY` is configured.
+- **YouTube IFrame Player API**: embedded playback for YouTube results.
+- **Audius API**: track search and stream redirects without API keys.
+- **LRCLIB API**: synchronized lyrics or plain lyrics search.
+- **GitHub Pages**: static frontend deployment.
+- **Render**: Node.js backend hosting.
+- **ngrok**: mentioned in the README files only for temporary online testing.
 
 ---
 
-## File Structure
+## Actual File Structure
 
 ```text
 Deezer/
-|-- index.html          # Main app interface
-|-- styles.css          # Responsive styles and player layout
-|-- app.js              # Frontend logic, player, search, queue, favorites, and lyrics
-|-- config.js           # Backend URL used when the frontend runs on GitHub Pages
-|-- server.js           # Node.js backend with search/config/lyrics/stream APIs
-|-- package.json        # npm scripts and required Node version
-|-- README.md           # Original Italian documentation
-|-- README_IT.txt       # Text copy of the Italian README
-|-- README.txt          # English README
-|-- PROJECT_CONTEXT.md  # Italian context document
-|-- PROJECT_CONTEXT_EN.md # This English context document
-|-- .env.example        # Example environment variables without secrets
-|-- .gitignore          # Excludes .env
+|-- index.html             # Main interface: topbar, search, results, player, lyrics, queue/favorites
+|-- styles.css             # Responsive styles and UI components; includes unused residual CSS for account/profile/playlist
+|-- app.js                 # Frontend logic: API config, search, YouTube/audio player, queue, favorites, lyrics, localStorage
+|-- config.js              # Frontend global config with the Render backend URL for non-localhost environments
+|-- server.js              # Node.js backend: config/search/stream/lyrics APIs + whitelisted static file serving
+|-- capacitor.config.json  # Capacitor config for the Android app
+|-- package.json           # Metadata, `start` and `check` scripts, Node >=18 requirement
+|-- package-lock.json      # npm lockfile generated with Capacitor dependencies
+|-- scripts/
+|   |-- prepare-capacitor.js # Copies static web assets into www/ before Android sync
+|-- android/               # Native Android project generated by Capacitor
+|-- www/                   # Generated Capacitor web directory, git-ignored
+|-- README_IT.txt          # Italian operational documentation
+|-- README.txt             # English operational documentation
+|-- PROJECT_CONTEXT.md     # Equivalent Italian context document
+|-- PROJECT_CONTEXT_EN.md  # This English context document
+|-- .env.example           # Example environment variables without secrets
+|-- .env                   # Real local environment variables, git-ignored; do not publish
+|-- .gitignore             # Excludes .env, node_modules, npm-debug.log*, *.local
+|-- assets/
+|   |-- open-music-icon.svg # SVG favicon/brand mark
 ```
+
+Note: there is no `README.md` in the current repository. The actual README files are `README_IT.txt` and `README.txt`.
 
 ---
 
-## Important Configuration
+## Configuration
 
-### Local
+### npm Scripts
 
-The local `.env` file may contain:
+```bash
+npm start   # starts server.js
+npm run check   # node --check app.js && node --check server.js
+npm run build:android-web   # regenerates www/ with web assets for Capacitor
+npm run cap:sync:android   # regenerates www/ and syncs the Android project
+npm run cap:open:android   # syncs and opens Android Studio
+```
+
+`package.json` now includes Capacitor dependencies (`@capacitor/core`, `@capacitor/android`) and the CLI in devDependencies.
+
+### Local Variables
+
+`.env.example` contains:
 
 ```text
 PORT=4173
@@ -73,11 +99,11 @@ AUDIUS_APP_NAME=OpenMusicPlayer
 YOUTUBE_API_KEY=
 ```
 
-The `.env` file must not be uploaded to GitHub.
+The local `.env` contains the same keys and is git-ignored. Do not put secrets in tracked files.
 
-### Render Production
+### Render Variables
 
-Expected Render environment variables:
+Recommended Render configuration:
 
 ```text
 HOST=0.0.0.0
@@ -90,7 +116,7 @@ CORS_ORIGIN=https://stefadale.github.io
 
 ### GitHub Pages Frontend
 
-`config.js` must point to the Render backend:
+Current `config.js`:
 
 ```js
 window.APP_CONFIG = {
@@ -98,30 +124,249 @@ window.APP_CONFIG = {
 };
 ```
 
+`index.html` loads `config.js` before `app.js`:
+
+```html
+<script src="config.js"></script>
+<script src="app.js" defer></script>
+```
+
+In the frontend, `getApiBaseUrl()` uses an empty relative base on `localhost`, `127.0.0.1`, and `::1`; on other hosts it uses `window.APP_CONFIG.API_BASE_URL` without a trailing slash.
+In native Capacitor shells (`window.Capacitor` or `capacitor:` protocol), it always uses `window.APP_CONFIG.API_BASE_URL`, even if the WebView exposes a `localhost` hostname.
+
+### Android APK With Capacitor
+
+- App id: `com.stefadale.openmusicplayer`.
+- App name: `Open Music Player`.
+- Capacitor web dir: `www`.
+- `www/` is generated by `scripts/prepare-capacitor.js`, copying `index.html`, `styles.css`, `app.js`, `config.js`, and `assets/open-music-icon.svg`.
+- The native Android project is in `android/`.
+- Building a debug APK requires JDK 11+ and Android SDK/Android Studio.
+- At the latest build attempt, compilation stopped because Java 8 was active: Android Gradle Plugin requires at least Java 11.
+
+---
+
+## Backend (`server.js`)
+
+### Startup And Static Files
+
+- Default port: `4173`.
+- Default host: `127.0.0.1`.
+- Default Audius app name: `OpenMusicPlayer`.
+- Static root: repository directory.
+- Whitelisted static files:
+  - `/index.html`
+  - `/styles.css`
+  - `/app.js`
+  - `/config.js`
+  - `/assets/open-music-icon.svg`
+- `/` resolves to `/index.html`.
+- Other static paths return `404`.
+- Static files and JSON responses use `Cache-Control: no-store`.
+
+### CORS
+
+`setCorsHeaders()` sets:
+
+```text
+Access-Control-Allow-Origin: process.env.CORS_ORIGIN || "*"
+Access-Control-Allow-Methods: GET,OPTIONS
+Access-Control-Allow-Headers: Content-Type
+```
+
+`OPTIONS` responds with `204`.
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/config` | GET | Returns provider state: `provider`, `lyricsProvider`, `configured`, `youtubeConfigured`, `youtubeNeedsApiKey`, `needsApiKey` |
+| `/api/search?q=...&limit=24` | GET | Searches YouTube when configured and Audius; `limit` is capped at 50 |
+| `/api/stream?id=...` | GET | Redirects `302` to the Audius stream for the requested track id |
+| `/api/lyrics?track=...&artist=...&duration=...` | GET | Searches LRCLIB and returns plain/synced lyrics when found |
+
+### Search Logic
+
+- If `q` is missing, it returns `{ resultCount: 0, results: [] }`.
+- YouTube is used only when `YOUTUBE_API_KEY` is set.
+- YouTube Data API:
+  - searches `type=video`, `videoCategoryId=10`, `order=relevance`;
+  - uses `regionCode=IT`, `relevanceLanguage=it`, `videoEmbeddable=true`, `safeSearch=none`;
+  - requests up to 25 results from the search endpoint;
+  - then calls `/videos` with `snippet,contentDetails,statistics,status`.
+- YouTube videos are filtered:
+  - embeddable and public;
+  - playable in Italy according to `regionRestriction`;
+  - not live;
+  - not age restricted;
+  - duration between 45 and 900 seconds.
+- YouTube results are sorted with local scoring based on token coverage, artist/title matches, official terms, penalties for unwanted lyrics/live results, cover/tutorial/reaction terms, Topic channels, and play count.
+- If YouTube produces results, the response mixes up to about 65% YouTube results and the rest Audius backups, within `limit`.
+- If YouTube is not configured or returns no usable results, the response uses Audius.
+- The response includes `youtubeError` when YouTube search fails.
+
+### Result Normalization
+
+**Audius** results:
+
+- `id`, `source: "audius"`, `title`, `artist`, `album`, `cover`, `coverBig`, `duration`, `stream`, `link`, `playCount`, `favoriteCount`, `genre`.
+- `stream` is a relative path: `/api/stream?id=...`.
+
+**YouTube** results:
+
+- `id: "youtube:<videoId>"`, `source: "youtube"`, `youtubeId`, `title`, `artist`, `album: "YouTube"`, `cover`, `coverBig`, `duration`, `stream: ""`, `link`, `playCount`, `favoriteCount`, `genre: "YouTube"`, `embeddable`.
+- `parseYouTubeTitle()` splits artist and title using `" - "` and also contains an en dash separator that appears in the file as a possible encoding/mojibake artifact. Verify it before changing parsing behavior.
+
+### Lyrics
+
+- LRCLIB endpoint used: `https://lrclib.net/api/search`.
+- Parameters sent: `track_name`, `artist_name`.
+- `User-Agent` header: `${AUDIUS_APP_NAME} (local development)`.
+- Match selection rewards title, artist, presence of `syncedLyrics`/`plainLyrics`, and close duration.
+- If there is no match, it returns `{ found: false }`.
+
+---
+
+## Frontend (`index.html`, `app.js`, `styles.css`)
+
+### Layout And UI
+
+- Page language: `it`.
+- Page title: `Open Music Player`.
+- Current meta description: free player with Audius, full tracks, lyrics, queue, and local favorites.
+- Meta robots: `noindex, nofollow`.
+- Favicon/brand: `assets/open-music-icon.svg`.
+- Main sections:
+  - topbar with brand and search;
+  - results pane;
+  - side pane with now playing, lyrics, queue/favorites;
+  - fixed bottom player controls.
+- The markup does not contain a `#resultCount` element; `app.js` supports it optionally and does not fail when it is missing.
+
+### Frontend State
+
+`app.js` keeps this in-memory state:
+
+- `currentTrack`
+- `queue`
+- `favorites`
+- `results`
+- `activeTab`
+- `isPlaying`
+- `serverAvailable`
+- `youtubeConfigured`
+- `lyrics`
+- `youtubeReady`
+
+Persistence in `localStorage`:
+
+```text
+open-music-player-state
+```
+
+Persisted fields:
+
+- `currentTrack`
+- `queue`
+- `favorites`
+- `activeTab`
+
+### Initialization Flow
+
+1. Restore state from `localStorage`.
+2. Bind event listeners.
+3. Render initial UI.
+4. Load the YouTube IFrame API.
+5. Call `/api/config`.
+6. Run an initial search with this default query:
+
+```text
+top hits italia
+```
+
+The frontend fetch timeout is `70000` ms.
+
+### Playback
+
+- Audius uses `<audio id="audio">` with a source resolved to `/api/stream`.
+- YouTube uses the IFrame Player API loaded dynamically from `https://www.youtube.com/iframe_api`.
+- Shared controls handle play/pause, previous, next, seek, and volume.
+- For YouTube, a 500 ms timer updates timeline and active lyrics.
+- YouTube errors 101/150 show an embed-disallowed message; error 100 indicates an unavailable/private video.
+
+### Queue, Favorites, And Lyrics
+
+- Result cards have action menus: play, add to queue, add/remove favorite, open source.
+- Queue avoids duplicates by `id`.
+- Favorites are saved in `localStorage`.
+- Lyrics are searched for each track with `track`, `artist`, and `duration`.
+- Synchronized lyrics are parsed from `[mm:ss.xxx] text` lines.
+- Clicking a synchronized lyric line sets `els.audio.currentTime`; currently, for YouTube tracks, lyric-line seeking does not call `youtubePlayer.seekTo`.
+
+### CSS And Responsiveness
+
+- Dark theme with red, green, and yellow accents.
+- Desktop layout: results + sidebar.
+- Main breakpoints: `1040px`, `760px`, `420px`.
+- The fixed player hides volume below `1040px` and compacts on mobile.
+- Tooltips are based on `data-tooltip`.
+- Residual CSS exists but is not connected to current markup:
+  - `.account`, `.account-button`, `.profile`
+  - `.library-toolbar`
+  - `.playlist-list`, `.playlist-item`, `.playlist-title`, `.playlist-meta`
+
 ---
 
 ## Implemented Features
 
 - Track search through the backend.
-- YouTube as the main provider when the API key is configured.
-- Audius as a free fallback.
-- Playback through the YouTube IFrame Player or Audius streams.
+- YouTube catalog search when `YOUTUBE_API_KEY` is configured.
+- Audius fallback/backup without API keys.
+- YouTube playback through the IFrame Player API.
+- Audius playback through backend stream redirects.
 - Playback queue.
-- Favorites saved in `localStorage`.
-- Lyrics through LRCLIB.
-- Responsive UI for desktop and mobile.
-- Real deployment with GitHub Pages + Render.
-- `robots` meta tag with `noindex, nofollow` in `index.html` to prevent indexing.
+- Local favorites.
+- Source link for each track.
+- Artwork, duration, and play/view count when available.
+- LRCLIB plain or synchronized lyrics.
+- Active synchronized lyric highlighting during playback.
+- Responsive desktop/mobile UI.
+- Expected GitHub Pages + Render deployment.
+- `robots` meta tag with `noindex, nofollow`.
 
 ---
 
-## Operational Notes
+## Limits And Technical Notes
 
-- The public site to open and share is the GitHub Pages URL.
-- Render serves the backend; it may also show the HTML page, but it is not the main user-facing link.
-- If GitHub Pages cannot reach the backend, check `config.js`, script order in `index.html`, and CORS on Render.
-- The CORS value must be lowercase: `https://stefadale.github.io`.
-- If YouTube does not return results, check the Google Cloud API key restrictions.
+- It does not provide Spotify's full commercial catalog; it uses YouTube/Audius within the legal and technical limits of those services.
+- The YouTube key must remain backend-only.
+- GitHub Pages hosts only the static frontend; the Node backend must run on Render or an equivalent service.
+- Render may also serve `index.html`, but the documented primary public link remains GitHub Pages.
+- `CORS_ORIGIN` in production should be set to the GitHub Pages origin, for example `https://stefadale.github.io`.
+- If the backend does not respond, the frontend shows different messages for local files, localhost, and remote backend usage.
+- `README.txt` and `README_IT.txt` are operational docs; these two `PROJECT_CONTEXT*` files are the complete resume context.
+- At audit time, the working tree had pre-existing README changes: removal of the specific "Fabri Fibra" reference in the YouTube section.
+
+---
+
+## Verification And Maintenance
+
+Useful commands:
+
+```bash
+npm run check
+npm start
+```
+
+Recommended manual checks after functional changes:
+
+- Open `http://127.0.0.1:4173`.
+- Verify `/api/config`.
+- Search for a mainstream artist with and without `YOUTUBE_API_KEY`.
+- Play one YouTube result and one Audius result.
+- Verify queue, favorites, page reload, and `localStorage`.
+- Verify plain/synced lyrics and the "lyrics not found" state.
+- Test narrow mobile and desktop layouts.
 
 ---
 
@@ -131,12 +376,15 @@ window.APP_CONFIG = {
 |---|---|---|
 | June 29, 2026 | Codex | Created the music app, configured YouTube/Audius/LRCLIB, added the Node.js backend, responsive UI, GitHub Pages + Render deployment, and operational documentation. |
 | June 29, 2026 | Codex | Added the `noindex,nofollow` meta tag, copied the Italian README, translated the README to English, and generated the IT/EN context documents. |
+| June 30, 2026 | Codex | Completed a full repository audit and realigned the IT/EN context documents with actual structure, endpoints, configuration, frontend, backend, limits, and observed technical debt. |
 
 ---
 
 ## Recommended Next Steps
 
-- Remove any unnecessary debug fields from API responses.
-- Further improve YouTube result ranking.
+- Fix or confirm the encoding/mojibake artifact in the en dash separator inside `parseYouTubeTitle()`.
+- Decide whether to reintroduce a visible `#resultCount` element or remove the optional logic from `app.js`.
+- Remove residual CSS for account/profile/playlist if those features are not planned soon.
+- Use `youtubePlayer.seekTo()` when clicking a synchronized lyric line for a YouTube track.
+- Improve ranking and deduplication between YouTube and Audius results.
 - Consider a custom domain.
-- Keep the YouTube key protected in backend environment variables.

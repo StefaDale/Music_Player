@@ -103,12 +103,7 @@ async function handleSearch(res, url) {
   });
 
   if (youtubeResults.length) {
-    const youtubeLimit = Math.min(youtubeResults.length, limit, Math.max(8, Math.ceil(limit * 0.65)));
-    const backupLimit = Math.max(0, limit - youtubeLimit);
-    const results = [
-      ...youtubeResults.slice(0, youtubeLimit),
-      ...audiusResults.slice(0, backupLimit),
-    ];
+    const results = mergeSearchResults(youtubeResults, audiusResults, limit);
 
     sendJson(res, {
       resultCount: results.length,
@@ -125,6 +120,49 @@ async function handleSearch(res, url) {
     youtubeError,
     results,
   });
+}
+
+function mergeSearchResults(youtubeResults, audiusResults, limit) {
+  const youtubeLimit = Math.min(youtubeResults.length, limit, Math.max(8, Math.ceil(limit * 0.65)));
+  const merged = [];
+  const seen = new Set();
+
+  addUniqueTracks(merged, seen, youtubeResults.slice(0, youtubeLimit), limit);
+  addUniqueTracks(merged, seen, audiusResults, limit);
+  addUniqueTracks(merged, seen, youtubeResults.slice(youtubeLimit), limit);
+
+  return merged;
+}
+
+function addUniqueTracks(target, seen, tracks, limit) {
+  for (const track of tracks) {
+    if (target.length >= limit) {
+      return;
+    }
+
+    const duplicateKey = getTrackDuplicateKey(track);
+
+    if (duplicateKey && seen.has(duplicateKey)) {
+      continue;
+    }
+
+    target.push(track);
+
+    if (duplicateKey) {
+      seen.add(duplicateKey);
+    }
+  }
+}
+
+function getTrackDuplicateKey(track) {
+  const artist = normalizeText(track.artist);
+  const title = normalizeText(track.title);
+
+  if (!title) {
+    return "";
+  }
+
+  return `${artist}|${title}`;
 }
 
 async function searchAudius(query, limit) {

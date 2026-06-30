@@ -120,13 +120,7 @@ function bindEvents() {
 
   els.seekRange.addEventListener("input", () => {
     updateRangeProgress(els.seekRange);
-    if (state.currentTrack?.source === "youtube" && youtubePlayer?.seekTo) {
-      youtubePlayer.seekTo(Number(els.seekRange.value), true);
-      updateActiveLyric();
-    } else if (Number.isFinite(els.audio.duration)) {
-      els.audio.currentTime = Number(els.seekRange.value);
-      updateActiveLyric();
-    }
+    seekToPlaybackTime(Number(els.seekRange.value));
   });
 
   els.volumeRange.addEventListener("input", () => {
@@ -535,8 +529,7 @@ function renderLyrics() {
       button.dataset.index = String(index);
       button.textContent = line.text || " ";
       button.addEventListener("click", () => {
-        els.audio.currentTime = line.time;
-        updateActiveLyric();
+        seekToPlaybackTime(line.time);
       });
       fragment.appendChild(button);
     });
@@ -1017,6 +1010,23 @@ function getPlaybackTime() {
   }
 
   return Number.isFinite(els.audio.currentTime) ? els.audio.currentTime : 0;
+}
+
+function seekToPlaybackTime(time) {
+  const targetTime = Number(time);
+
+  if (!Number.isFinite(targetTime)) {
+    return;
+  }
+
+  if (state.currentTrack?.source === "youtube" && youtubePlayer?.seekTo) {
+    youtubePlayer.seekTo(targetTime, true);
+  } else if (Number.isFinite(els.audio.duration)) {
+    els.audio.currentTime = targetTime;
+  }
+
+  updateTimeline();
+  updateActiveLyric();
 }
 
 function formatTime(seconds) {

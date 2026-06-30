@@ -412,7 +412,8 @@ function parseYouTubeTitle(value) {
     .replace(/\([^\)]*(official|video|audio|lyrics|visualizer|hd|4k)[^\)]*\)/gi, "")
     .replace(/\s+/g, " ")
     .trim();
-  const separator = cleanTitle.includes(" - ") ? " - " : cleanTitle.includes(" – ") ? " – " : null;
+  const separators = [" - ", " \u2013 ", " \u2014 "];
+  const separator = separators.find((candidate) => cleanTitle.includes(candidate));
 
   if (!separator) {
     return { artist: "", title: cleanTitle };

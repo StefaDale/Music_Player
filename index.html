@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Open Music Player</title>
+    <title>Open Music</title>
     <meta
       name="description"
-      content="Player musicale gratuito con Audius, brani completi, testi, coda e preferiti locali."
+      content="Player musicale gratuito con brani completi, testi, coda, playlist e account privato."
     >
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" href="assets/open-music-icon.svg" type="image/svg+xml">
@@ -15,29 +15,38 @@
   <body>
     <div class="app-shell">
       <header class="topbar" aria-label="Barra principale">
-        <div class="brand" aria-label="Open Music Player">
-          <img class="brand-mark" src="assets/open-music-icon.svg" alt="" aria-hidden="true" width="36" height="36">
+        <div class="brand" aria-label="Open Music">
+          <img class="brand-mark" src="assets/open-music-icon.svg" alt="" aria-hidden="true" width="44" height="44">
           <span>Open Music</span>
         </div>
 
-        <form class="search" id="searchForm">
-          <label class="sr-only" for="searchInput">Cerca musica</label>
-          <input
-            id="searchInput"
-            name="query"
-            type="search"
-            autocomplete="off"
-            placeholder="Brano, artista, genere o mood"
-            required
-          >
-        </form>
+        <div class="topbar-actions">
+          <button class="icon-button search-toggle" type="button" id="searchToggle" aria-label="Apri ricerca" aria-expanded="false" data-tooltip="Cerca">
+            <span aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24" focusable="false">
+                <path d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/>
+              </svg>
+            </span>
+          </button>
+          <form class="search" id="searchForm" aria-hidden="true">
+            <label class="sr-only" for="searchInput">Cerca musica</label>
+            <input
+              id="searchInput"
+              name="query"
+              type="search"
+              autocomplete="off"
+              placeholder="Brano, artista, genere o mood"
+              required
+            >
+          </form>
+        </div>
       </header>
 
       <main class="workspace">
         <section class="results-pane" aria-labelledby="resultsTitle">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">YouTube / Audius</p>
+              <p class="eyebrow">Scopri</p>
               <h1 id="resultsTitle">Ascolta</h1>
             </div>
             <p class="status-pill" id="resultCount">0 brani</p>
@@ -81,7 +90,7 @@
               rel="noreferrer"
               aria-disabled="true"
             >
-              Apri su Audius
+              Apri sorgente
             </a>
           </section>
 
@@ -98,38 +107,93 @@
             </div>
           </section>
 
-          <section class="library-pane" aria-label="Coda e preferiti">
-            <div class="tabs" role="tablist" aria-label="Raccolta">
-              <button
-                id="queueTab"
-                class="tab active"
-                type="button"
-                role="tab"
-                aria-selected="true"
-                aria-controls="queuePanel"
-              >
-                Coda
-              </button>
-              <button
-                id="favoritesTab"
-                class="tab"
-                type="button"
-                role="tab"
-                aria-selected="false"
-                aria-controls="favoritesPanel"
-              >
-                Preferiti
-              </button>
+          <section class="library-pane" aria-label="Coda">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Prossimi</p>
+                <h2>Coda</h2>
+              </div>
+            </div>
+            <div class="mini-list" id="queueList"></div>
+            <p class="empty-note" id="queueEmpty">La coda e' vuota.</p>
+          </section>
+
+          <section class="playlist-pane" aria-labelledby="playlistTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Raccolta</p>
+                <h2 id="playlistTitle">Playlist</h2>
+              </div>
+              <button class="small-button" type="button" id="newPlaylistButton">Nuova</button>
             </div>
 
-            <div id="queuePanel" class="tab-panel active" role="tabpanel" aria-labelledby="queueTab">
-              <div class="mini-list" id="queueList"></div>
-              <p class="empty-note" id="queueEmpty">La coda e' vuota.</p>
+            <form class="inline-form" id="playlistForm" hidden>
+              <label class="sr-only" for="playlistNameInput">Nome playlist</label>
+              <input id="playlistNameInput" type="text" maxlength="80" placeholder="Nome playlist">
+              <button class="small-button primary-action" type="submit">Crea</button>
+            </form>
+
+            <div class="playlist-target" id="playlistTarget" hidden>
+              <label for="playlistSelect">Aggiungi a</label>
+              <div>
+                <select id="playlistSelect"></select>
+                <button class="small-button primary-action" type="button" id="addToPlaylistButton">Aggiungi</button>
+              </div>
             </div>
 
-            <div id="favoritesPanel" class="tab-panel" role="tabpanel" aria-labelledby="favoritesTab" hidden>
-              <div class="mini-list" id="favoritesList"></div>
-              <p class="empty-note" id="favoritesEmpty">Nessun preferito salvato.</p>
+            <div class="playlist-list" id="playlistList"></div>
+            <p class="empty-note" id="playlistEmpty">Accedi e crea la tua prima playlist.</p>
+          </section>
+
+          <section class="account-pane" aria-labelledby="accountTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Profilo</p>
+                <h2 id="accountTitle">Account</h2>
+              </div>
+              <button class="small-button" type="button" id="logoutButton" hidden>Esci</button>
+            </div>
+
+            <div class="auth-status" id="authStatus">Accesso non effettuato.</div>
+
+            <div class="auth-forms" id="authForms">
+              <div class="auth-switch" role="tablist" aria-label="Account">
+                <button class="tab active" type="button" id="loginModeButton">Accedi</button>
+                <button class="tab" type="button" id="registerModeButton">Registrati</button>
+              </div>
+
+              <form class="auth-form active" id="loginForm">
+                <label for="loginEmail">Email</label>
+                <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                <button class="small-button primary-action" type="submit">Accedi</button>
+                <button class="text-link" type="button" id="forgotPasswordButton">Password dimenticata</button>
+              </form>
+
+              <form class="auth-form" id="registerForm">
+                <label for="registerName">Nome</label>
+                <input id="registerName" name="displayName" type="text" autocomplete="name" maxlength="60" required>
+                <label for="registerEmail">Email</label>
+                <input id="registerEmail" name="email" type="email" autocomplete="email" required>
+                <label for="registerPassword">Password</label>
+                <input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
+                <p class="form-note">Minimo 15 caratteri. Evita password gia' usate o comuni.</p>
+                <button class="small-button primary-action" type="submit">Crea account</button>
+              </form>
+
+              <form class="auth-form" id="forgotForm">
+                <label for="forgotEmail">Email</label>
+                <input id="forgotEmail" name="email" type="email" autocomplete="email" required>
+                <button class="small-button primary-action" type="submit">Invia link</button>
+                <button class="text-link" type="button" id="backToLoginButton">Torna al login</button>
+              </form>
+
+              <form class="auth-form" id="resetForm" hidden>
+                <label for="resetPassword">Nuova password</label>
+                <input id="resetPassword" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
+                <button class="small-button primary-action" type="submit">Aggiorna password</button>
+              </form>
             </div>
           </section>
         </aside>
@@ -142,7 +206,7 @@
           <img id="playerCover" src="" alt="" width="56" height="56">
           <div>
             <p id="playerTitle">Nessun brano selezionato</p>
-            <span id="playerArtist">YouTube / Audius</span>
+            <span id="playerArtist">Scegli una traccia</span>
           </div>
         </div>
 

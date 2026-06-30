@@ -8,8 +8,7 @@ const ICONS = {
   pause: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>',
   moreVertical: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>',
   queue: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M4 7h9M4 12h9M4 17h7M17 10v8M13 14h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>',
-  favorite: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.22L12 15.97l-4.7 2.47.9-5.22-3.8-3.7 5.25-.76L12 4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/></svg>',
-  favoriteFilled: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="m12 3.8 2.5 5.08 5.6.81-4.05 3.95.96 5.57L12 16.58l-5.01 2.63.96-5.57L3.9 9.69l5.6-.81L12 3.8Z"/></svg>',
+  playlist: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M5 6h11M5 11h11M5 16h7M18 15v6M15 18h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>',
   external: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M9 7h8v8M17 7 7 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>',
   remove: '<svg class="ui-icon" viewBox="0 0 24 24" focusable="false"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg>',
 };
@@ -17,12 +16,18 @@ const ICONS = {
 const state = {
   currentTrack: null,
   queue: [],
-  favorites: [],
+  playlists: [],
+  selectedTrackForPlaylist: null,
   results: [],
-  activeTab: "queue",
   isPlaying: false,
   serverAvailable: false,
+  accountsConfigured: false,
   youtubeConfigured: false,
+  searchOpen: false,
+  authMode: "login",
+  sessionToken: sessionStorage.getItem("open-music-session") || "",
+  user: null,
+  resetToken: "",
   lyrics: {
     status: "idle",
     lines: [],
@@ -41,6 +46,7 @@ let youtubeProgressTimer = null;
 
 const els = {
   audio: document.getElementById("audio"),
+  searchToggle: document.getElementById("searchToggle"),
   searchForm: document.getElementById("searchForm"),
   searchInput: document.getElementById("searchInput"),
   resultCount: document.getElementById("resultCount"),
@@ -65,26 +71,45 @@ const els = {
   currentTime: document.getElementById("currentTime"),
   durationTime: document.getElementById("durationTime"),
   volumeRange: document.getElementById("volumeRange"),
-  queueTab: document.getElementById("queueTab"),
-  favoritesTab: document.getElementById("favoritesTab"),
-  queuePanel: document.getElementById("queuePanel"),
-  favoritesPanel: document.getElementById("favoritesPanel"),
   queueList: document.getElementById("queueList"),
-  favoritesList: document.getElementById("favoritesList"),
   queueEmpty: document.getElementById("queueEmpty"),
-  favoritesEmpty: document.getElementById("favoritesEmpty"),
+  newPlaylistButton: document.getElementById("newPlaylistButton"),
+  playlistForm: document.getElementById("playlistForm"),
+  playlistNameInput: document.getElementById("playlistNameInput"),
+  playlistTarget: document.getElementById("playlistTarget"),
+  playlistSelect: document.getElementById("playlistSelect"),
+  addToPlaylistButton: document.getElementById("addToPlaylistButton"),
+  playlistList: document.getElementById("playlistList"),
+  playlistEmpty: document.getElementById("playlistEmpty"),
+  authStatus: document.getElementById("authStatus"),
+  authForms: document.getElementById("authForms"),
+  loginModeButton: document.getElementById("loginModeButton"),
+  registerModeButton: document.getElementById("registerModeButton"),
+  loginForm: document.getElementById("loginForm"),
+  registerForm: document.getElementById("registerForm"),
+  forgotForm: document.getElementById("forgotForm"),
+  resetForm: document.getElementById("resetForm"),
+  forgotPasswordButton: document.getElementById("forgotPasswordButton"),
+  backToLoginButton: document.getElementById("backToLoginButton"),
+  logoutButton: document.getElementById("logoutButton"),
 };
 
 async function init() {
   restoreState();
+  readAuthActionFromUrl();
   bindEvents();
   renderAll();
   loadYouTubeApi();
   await detectServer();
+  await restoreSession();
   runSearch(DEFAULT_QUERY, { syncInput: false });
 }
 
 function bindEvents() {
+  els.searchToggle.addEventListener("click", () => {
+    setSearchOpen(!state.searchOpen, { focus: true });
+  });
+
   els.searchForm.addEventListener("submit", (event) => {
     event.preventDefault();
     runSearch(els.searchInput.value.trim());
@@ -108,6 +133,9 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeTrackMenus();
+      if (state.searchOpen) {
+        setSearchOpen(false, { focusToggle: true });
+      }
     }
   });
 
@@ -150,8 +178,24 @@ function bindEvents() {
     playNextTrack();
   });
 
-  els.queueTab.addEventListener("click", () => setActiveTab("queue"));
-  els.favoritesTab.addEventListener("click", () => setActiveTab("favorites"));
+  els.newPlaylistButton.addEventListener("click", () => {
+    els.playlistForm.hidden = !els.playlistForm.hidden;
+    if (!els.playlistForm.hidden) {
+      els.playlistNameInput.focus();
+    }
+  });
+
+  els.playlistForm.addEventListener("submit", handleCreatePlaylist);
+  els.addToPlaylistButton.addEventListener("click", handleAddSelectedTrackToPlaylist);
+  els.loginModeButton.addEventListener("click", () => setAuthMode("login"));
+  els.registerModeButton.addEventListener("click", () => setAuthMode("register"));
+  els.forgotPasswordButton.addEventListener("click", () => setAuthMode("forgot"));
+  els.backToLoginButton.addEventListener("click", () => setAuthMode("login"));
+  els.loginForm.addEventListener("submit", handleLogin);
+  els.registerForm.addEventListener("submit", handleRegister);
+  els.forgotForm.addEventListener("submit", handleForgotPassword);
+  els.resetForm.addEventListener("submit", handleResetPassword);
+  els.logoutButton.addEventListener("click", handleLogout);
 
   els.audio.volume = Number(els.volumeRange.value);
   updateRangeProgress(els.volumeRange);
@@ -168,10 +212,9 @@ async function detectServer() {
   try {
     const config = await fetchJson("/api/config");
     state.serverAvailable = config.provider === "audius" || config.provider === "youtube+audius";
+    state.accountsConfigured = Boolean(config.accountsConfigured);
     state.youtubeConfigured = Boolean(config.youtubeConfigured);
-    if (state.youtubeConfigured) {
-      setMessage("YouTube attivo per il catalogo mainstream, Audius come fallback.");
-    }
+    renderAccount();
   } catch (error) {
     state.serverAvailable = false;
     setMessage(getBackendUnavailableMessage(error));
@@ -209,12 +252,12 @@ async function runSearch(query, options = {}) {
     renderResults();
 
     if (state.results.length) {
-      setMessage("Risultati da YouTube/Audius. Testi cercati via LRCLIB.");
+      setMessage("Risultati pronti. Scegli un brano o aggiungilo a una playlist.");
       setResultCount(`${state.results.length} brani`);
     } else {
       setMessage(state.youtubeConfigured
         ? "Nessun brano riproducibile trovato."
-        : "Nessun risultato: per artisti mainstream configura YOUTUBE_API_KEY.");
+        : "Nessun risultato disponibile in questo momento.");
       setResultCount("0 brani");
     }
   } catch (error) {
@@ -231,11 +274,17 @@ async function runSearch(query, options = {}) {
 async function fetchJson(url, options = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(state.sessionToken ? { Authorization: `Bearer ${state.sessionToken}` } : {}),
+    ...(options.headers || {}),
+  };
 
   const response = await fetch(resolveApiUrl(url), {
     credentials: API_BASE_URL ? "omit" : "same-origin",
     signal: controller.signal,
     ...options,
+    headers,
   }).finally(() => window.clearTimeout(timeout));
 
   const text = await response.text();
@@ -282,9 +331,10 @@ function renderAll() {
   renderPlaybackState();
   renderResults();
   renderQueue();
-  renderFavorites();
+  renderPlaylists();
+  renderAccount();
   renderLyrics();
-  renderTabs();
+  renderSearch();
 }
 
 function renderResults() {
@@ -302,7 +352,6 @@ function createTrackCard(track) {
   card.setAttribute("aria-label", `Riproduci ${track.title}`);
   const sourceLabel = track.source === "youtube" ? "YouTube" : "Audius";
   const sourceActionLabel = `Apri su ${sourceLabel}`;
-  const favoriteLabel = isFavorite(track.id) ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti";
   card.innerHTML = `
     <img src="${escapeAttribute(track.cover)}" alt="">
     <div class="track-info">
@@ -324,9 +373,9 @@ function createTrackCard(track) {
               <span aria-hidden="true">${iconSvg("queue")}</span>
               <span>Aggiungi alla coda</span>
             </button>
-            <button class="track-menu-item" type="button" data-action="favorite" role="menuitem" aria-label="${escapeAttribute(favoriteLabel)}" title="${escapeAttribute(favoriteLabel)}">
-              <span aria-hidden="true">${iconSvg(isFavorite(track.id) ? "favoriteFilled" : "favorite")}</span>
-              <span>${favoriteLabel}</span>
+            <button class="track-menu-item" type="button" data-action="playlist" role="menuitem" aria-label="Aggiungi a playlist" title="Aggiungi a playlist">
+              <span aria-hidden="true">${iconSvg("playlist")}</span>
+              <span>Aggiungi a playlist</span>
             </button>
             <a class="track-menu-item" href="${escapeAttribute(track.link)}" target="_blank" rel="noreferrer" role="menuitem" aria-label="${escapeAttribute(sourceActionLabel)}" title="${escapeAttribute(sourceActionLabel)}">
               <span aria-hidden="true">${iconSvg("external")}</span>
@@ -372,9 +421,9 @@ function createTrackCard(track) {
     addToQueue(track);
     closeTrackMenus();
   });
-  card.querySelector('[data-action="favorite"]').addEventListener("click", (event) => {
+  card.querySelector('[data-action="playlist"]').addEventListener("click", (event) => {
     event.stopPropagation();
-    toggleFavorite(track);
+    selectTrackForPlaylist(track);
     closeTrackMenus();
   });
   card.querySelector(".track-menu-item[href]").addEventListener("click", () => closeTrackMenus());
@@ -475,19 +524,6 @@ function renderQueue() {
   els.queueEmpty.hidden = state.queue.length > 0;
 }
 
-function renderFavorites() {
-  els.favoritesList.innerHTML = "";
-  state.favorites.forEach((track) => {
-    els.favoritesList.appendChild(createMiniTrack(track, {
-      actionLabel: "Rimuovi dai preferiti",
-      actionIcon: iconSvg("favoriteFilled"),
-      onPlay: () => playTrack(track),
-      onAction: () => toggleFavorite(track),
-    }));
-  });
-  els.favoritesEmpty.hidden = state.favorites.length > 0;
-}
-
 function createMiniTrack(track, options) {
   const item = document.createElement("div");
   item.className = "mini-track";
@@ -504,6 +540,98 @@ function createMiniTrack(track, options) {
   item.querySelector(".mini-copy").addEventListener("click", options.onPlay);
   item.querySelector(".icon-button").addEventListener("click", options.onAction);
   return item;
+}
+
+function renderPlaylists() {
+  els.playlistList.innerHTML = "";
+  els.playlistTarget.hidden = !state.selectedTrackForPlaylist;
+  els.addToPlaylistButton.disabled = !state.playlists.length || !state.selectedTrackForPlaylist;
+  els.playlistSelect.innerHTML = state.playlists
+    .map((playlist) => `<option value="${escapeAttribute(playlist.id)}">${escapeHtml(playlist.name)}</option>`)
+    .join("");
+
+  if (!state.user) {
+    els.playlistEmpty.textContent = "Accedi per salvare playlist private.";
+    els.playlistEmpty.hidden = false;
+    return;
+  }
+
+  if (!state.playlists.length) {
+    els.playlistEmpty.textContent = "Crea una playlist per iniziare.";
+    els.playlistEmpty.hidden = false;
+    return;
+  }
+
+  els.playlistEmpty.hidden = true;
+  state.playlists.forEach((playlist) => {
+    const article = document.createElement("article");
+    article.className = "playlist-card";
+    article.innerHTML = `
+      <div class="playlist-card-heading">
+        <div>
+          <h3>${escapeHtml(playlist.name)}</h3>
+          <p>${playlist.tracks.length} brani</p>
+        </div>
+        <button class="icon-button" type="button" aria-label="Elimina ${escapeAttribute(playlist.name)}" data-tooltip="Elimina">
+          <span aria-hidden="true">${iconSvg("remove")}</span>
+        </button>
+      </div>
+      <div class="mini-list"></div>
+    `;
+    article.querySelector(".icon-button").addEventListener("click", () => deletePlaylist(playlist.id));
+    const list = article.querySelector(".mini-list");
+    playlist.tracks.slice(0, 6).forEach((entry) => {
+      list.appendChild(createMiniTrack(entry.track, {
+        actionLabel: "Rimuovi dalla playlist",
+        actionIcon: iconSvg("remove"),
+        onPlay: () => playTrack(entry.track),
+        onAction: () => removeTrackFromPlaylist(playlist.id, entry.id),
+      }));
+    });
+    if (!playlist.tracks.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-note";
+      empty.textContent = "Nessun brano salvato.";
+      list.appendChild(empty);
+    }
+    els.playlistList.appendChild(article);
+  });
+}
+
+function renderAccount() {
+  els.logoutButton.hidden = !state.user;
+  els.authForms.hidden = Boolean(state.user);
+
+  if (!state.accountsConfigured) {
+    els.authStatus.textContent = "Account non ancora configurati sul backend.";
+  } else if (state.user) {
+    els.authStatus.textContent = `Ciao ${state.user.displayName}. Playlist sincronizzate e private.`;
+  } else {
+    els.authStatus.textContent = "Accedi per salvare playlist private.";
+  }
+
+  const modes = ["login", "register", "forgot", "reset"];
+  modes.forEach((mode) => {
+    const form = els[`${mode}Form`];
+    if (form) {
+      form.classList.toggle("active", state.authMode === mode);
+      form.hidden = state.authMode !== mode && mode === "reset";
+    }
+  });
+  els.loginForm.classList.toggle("active", state.authMode === "login");
+  els.registerForm.classList.toggle("active", state.authMode === "register");
+  els.forgotForm.classList.toggle("active", state.authMode === "forgot");
+  els.resetForm.classList.toggle("active", state.authMode === "reset");
+  els.loginModeButton.classList.toggle("active", state.authMode === "login");
+  els.registerModeButton.classList.toggle("active", state.authMode === "register");
+}
+
+function renderSearch() {
+  document.body.classList.toggle("search-open", state.searchOpen);
+  els.searchForm.setAttribute("aria-hidden", String(!state.searchOpen));
+  els.searchToggle.setAttribute("aria-expanded", String(state.searchOpen));
+  els.searchToggle.setAttribute("aria-label", state.searchOpen ? "Chiudi ricerca" : "Apri ricerca");
+  els.searchToggle.dataset.tooltip = state.searchOpen ? "Chiudi ricerca" : "Cerca";
 }
 
 function renderLyrics() {
@@ -569,18 +697,6 @@ function getLyricsStatusLabel() {
   }
 
   return "In attesa";
-}
-
-function renderTabs() {
-  const queueActive = state.activeTab === "queue";
-  els.queueTab.classList.toggle("active", queueActive);
-  els.favoritesTab.classList.toggle("active", !queueActive);
-  els.queueTab.setAttribute("aria-selected", String(queueActive));
-  els.favoritesTab.setAttribute("aria-selected", String(!queueActive));
-  els.queuePanel.hidden = !queueActive;
-  els.favoritesPanel.hidden = queueActive;
-  els.queuePanel.classList.toggle("active", queueActive);
-  els.favoritesPanel.classList.toggle("active", !queueActive);
 }
 
 async function playTrack(track) {
@@ -953,25 +1069,272 @@ function addToQueue(track) {
   renderQueue();
 }
 
-function toggleFavorite(track) {
-  if (isFavorite(track.id)) {
-    state.favorites = state.favorites.filter((favorite) => favorite.id !== track.id);
-  } else {
-    state.favorites.unshift(track);
+function selectTrackForPlaylist(track) {
+  if (!state.user) {
+    setMessage("Accedi per salvare brani nelle playlist.");
+    setAuthMode("login");
+    return;
   }
-  persistState();
-  renderFavorites();
-  renderResults();
+
+  state.selectedTrackForPlaylist = track;
+  if (!state.playlists.length) {
+    els.playlistForm.hidden = false;
+    els.playlistNameInput.focus();
+    setMessage("Crea una playlist, poi aggiungi il brano selezionato.");
+  } else {
+    setMessage(`${track.title} pronto per essere aggiunto a una playlist.`);
+  }
+  renderPlaylists();
 }
 
-function isFavorite(trackId) {
-  return state.favorites.some((track) => track.id === trackId);
+async function handleCreatePlaylist(event) {
+  event.preventDefault();
+  const name = els.playlistNameInput.value.trim();
+  if (!name) {
+    return;
+  }
+
+  try {
+    const data = await fetchJson("/api/playlists", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    state.playlists.unshift(data.playlist);
+    els.playlistNameInput.value = "";
+    els.playlistForm.hidden = true;
+    renderPlaylists();
+    setMessage("Playlist creata.");
+  } catch (error) {
+    setMessage(error.message);
+  }
 }
 
-function setActiveTab(tab) {
-  state.activeTab = tab;
-  persistState();
-  renderTabs();
+async function handleAddSelectedTrackToPlaylist() {
+  const playlistId = els.playlistSelect.value;
+  const track = state.selectedTrackForPlaylist;
+  if (!playlistId || !track) {
+    return;
+  }
+
+  try {
+    const data = await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+      method: "POST",
+      body: JSON.stringify({ track }),
+    });
+    const playlist = state.playlists.find((item) => item.id === playlistId);
+    if (playlist) {
+      playlist.tracks.push(data.track);
+    }
+    state.selectedTrackForPlaylist = null;
+    renderPlaylists();
+    setMessage(`${track.title} aggiunto alla playlist.`);
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function removeTrackFromPlaylist(playlistId, trackEntryId) {
+  try {
+    await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackEntryId)}`, {
+      method: "DELETE",
+    });
+    const playlist = state.playlists.find((item) => item.id === playlistId);
+    if (playlist) {
+      playlist.tracks = playlist.tracks.filter((entry) => entry.id !== trackEntryId);
+    }
+    renderPlaylists();
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function deletePlaylist(playlistId) {
+  try {
+    await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}`, { method: "DELETE" });
+    state.playlists = state.playlists.filter((playlist) => playlist.id !== playlistId);
+    renderPlaylists();
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function loadPlaylists() {
+  if (!state.sessionToken) {
+    state.playlists = [];
+    renderPlaylists();
+    return;
+  }
+
+  try {
+    const data = await fetchJson("/api/playlists");
+    state.playlists = Array.isArray(data.playlists) ? data.playlists : [];
+    renderPlaylists();
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+function setSearchOpen(open, options = {}) {
+  state.searchOpen = open;
+  renderSearch();
+  if (open && options.focus) {
+    window.setTimeout(() => els.searchInput.focus(), 180);
+  } else if (!open && options.focusToggle) {
+    els.searchToggle.focus();
+  }
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  renderAccount();
+}
+
+function readAuthActionFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const verifyToken = params.get("verify");
+  const resetToken = params.get("reset");
+
+  if (verifyToken) {
+    verifyAccount(verifyToken);
+  }
+
+  if (resetToken) {
+    state.resetToken = resetToken;
+    state.authMode = "reset";
+  }
+}
+
+async function verifyAccount(token) {
+  try {
+    const data = await fetchJson(`/api/auth/verify?token=${encodeURIComponent(token)}`);
+    setMessage(data.message || "Account confermato.");
+    cleanAuthUrl();
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function restoreSession() {
+  if (!state.sessionToken || !state.accountsConfigured) {
+    renderAccount();
+    return;
+  }
+
+  try {
+    const data = await fetchJson("/api/auth/me");
+    state.user = data.user;
+    await loadPlaylists();
+  } catch (error) {
+    state.sessionToken = "";
+    sessionStorage.removeItem("open-music-session");
+  }
+  renderAccount();
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const form = new FormData(els.loginForm);
+
+  try {
+    const data = await fetchJson("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: form.get("email") || els.loginForm.querySelector("#loginEmail").value,
+        password: form.get("password") || els.loginForm.querySelector("#loginPassword").value,
+      }),
+    });
+    state.sessionToken = data.token;
+    state.user = data.user;
+    sessionStorage.setItem("open-music-session", data.token);
+    els.loginForm.reset();
+    await loadPlaylists();
+    renderAccount();
+    setMessage("Accesso effettuato.");
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  const form = new FormData(els.registerForm);
+
+  try {
+    const data = await fetchJson("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: form.get("displayName"),
+        email: form.get("email"),
+        password: form.get("password"),
+      }),
+    });
+    els.registerForm.reset();
+    setAuthMode("login");
+    setMessage(data.message || "Controlla la tua email per confermare l'account.");
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function handleForgotPassword(event) {
+  event.preventDefault();
+  const form = new FormData(els.forgotForm);
+
+  try {
+    const data = await fetchJson("/api/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email: form.get("email") }),
+    });
+    els.forgotForm.reset();
+    setAuthMode("login");
+    setMessage(data.message);
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function handleResetPassword(event) {
+  event.preventDefault();
+  const form = new FormData(els.resetForm);
+
+  try {
+    const data = await fetchJson("/api/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({
+        token: state.resetToken,
+        password: form.get("password"),
+      }),
+    });
+    state.resetToken = "";
+    els.resetForm.reset();
+    cleanAuthUrl();
+    setAuthMode("login");
+    setMessage(data.message);
+  } catch (error) {
+    setMessage(error.message);
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetchJson("/api/auth/logout", { method: "POST" });
+  } catch (error) {
+    // Local cleanup still happens if the server session has already expired.
+  }
+  state.sessionToken = "";
+  state.user = null;
+  state.playlists = [];
+  state.selectedTrackForPlaylist = null;
+  sessionStorage.removeItem("open-music-session");
+  renderAccount();
+  renderPlaylists();
+  setMessage("Logout completato.");
+}
+
+function cleanAuthUrl() {
+  if (window.history.replaceState) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
 }
 
 function updateTimeline() {
@@ -1047,8 +1410,6 @@ function persistState() {
   const payload = {
     currentTrack: state.currentTrack,
     queue: state.queue,
-    favorites: state.favorites,
-    activeTab: state.activeTab,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
@@ -1058,8 +1419,6 @@ function restoreState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     state.currentTrack = saved.currentTrack || null;
     state.queue = Array.isArray(saved.queue) ? saved.queue : [];
-    state.favorites = Array.isArray(saved.favorites) ? saved.favorites : [];
-    state.activeTab = saved.activeTab || "queue";
 
     if (state.currentTrack?.stream) {
       els.audio.src = resolveApiUrl(state.currentTrack.stream);

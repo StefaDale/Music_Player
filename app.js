@@ -25,6 +25,8 @@ const state = {
   youtubeConfigured: false,
   searchOpen: false,
   authMode: "login",
+  authMessage: "",
+  authMessageTone: "neutral",
   sessionToken: sessionStorage.getItem("open-music-session") || "",
   user: null,
   resetToken: "",
@@ -239,6 +241,9 @@ async function runSearch(query, options = {}) {
   renderResults();
   setMessage("Ricerca in corso...");
   setResultCount("Caricamento");
+  els.searchForm.classList.add("is-loading");
+  els.searchForm.setAttribute("aria-busy", "true");
+  els.searchInput.disabled = true;
 
   try {
     const data = await fetchJson(`/api/search?q=${encodeURIComponent(query)}&limit=24`);
@@ -268,6 +273,12 @@ async function runSearch(query, options = {}) {
     console.error(error);
     setMessage(getBackendUnavailableMessage(error));
     setResultCount("Errore");
+  } finally {
+    if (searchId === activeSearchId) {
+      els.searchForm.classList.remove("is-loading");
+      els.searchForm.setAttribute("aria-busy", "false");
+      els.searchInput.disabled = false;
+    }
   }
 }
 
@@ -602,7 +613,12 @@ function renderAccount() {
   els.logoutButton.hidden = !state.user;
   els.authForms.hidden = Boolean(state.user);
 
-  if (!state.accountsConfigured) {
+  els.authStatus.classList.remove("success", "error", "neutral");
+  els.authStatus.classList.add(state.authMessageTone || "neutral");
+
+  if (state.authMessage) {
+    els.authStatus.textContent = state.authMessage;
+  } else if (!state.accountsConfigured) {
     els.authStatus.textContent = "Account non ancora configurati sul backend.";
   } else if (state.user) {
     els.authStatus.textContent = `Ciao ${state.user.displayName}. Playlist sincronizzate e private.`;
@@ -1089,12 +1105,13 @@ function selectTrackForPlaylist(track) {
 
 async function handleCreatePlaylist(event) {
   event.preventDefault();
+  const submitButton = event.submitter || els.playlistForm.querySelector('button[type="submit"]');
   const name = els.playlistNameInput.value.trim();
   if (!name) {
     return;
   }
 
-  try {
+  await withButtonLoading(submitButton, "Creo...", async () => {
     const data = await fetchJson("/api/playlists", {
       method: "POST",
       body: JSON.stringify({ name }),
@@ -1104,9 +1121,7 @@ async function handleCreatePlaylist(event) {
     els.playlistForm.hidden = true;
     renderPlaylists();
     setMessage("Playlist creata.");
-  } catch (error) {
-    setMessage(error.message);
-  }
+  }).catch((error) => setMessage(error.message));
 }
 
 async function handleAddSelectedTrackToPlaylist() {
@@ -1116,7 +1131,7 @@ async function handleAddSelectedTrackToPlaylist() {
     return;
   }
 
-  try {
+  await withButtonLoading(els.addToPlaylistButton, "Aggiungo...", async () => {
     const data = await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, {
       method: "POST",
       body: JSON.stringify({ track }),
@@ -1128,9 +1143,7 @@ async function handleAddSelectedTrackToPlaylist() {
     state.selectedTrackForPlaylist = null;
     renderPlaylists();
     setMessage(`${track.title} aggiunto alla playlist.`);
-  } catch (error) {
-    setMessage(error.message);
-  }
+  }).catch((error) => setMessage(error.message));
 }
 
 async function removeTrackFromPlaylist(playlistId, trackEntryId) {
@@ -1186,7 +1199,34 @@ function setSearchOpen(open, options = {}) {
 
 function setAuthMode(mode) {
   state.authMode = mode;
+  state.authMessage = "";
+  state.authMessageTone = "neutral";
   renderAccount();
+}
+
+function setAuthMessage(message, tone = "neutral") {
+  state.authMessage = message;
+  state.authMessageTone = tone;
+  renderAccount();
+}
+
+async function withButtonLoading(button, loadingLabel, task) {
+  if (!button) {
+    return task();
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.classList.add("is-loading");
+  button.textContent = loadingLabel;
+
+  try {
+    return await task();
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    button.textContent = originalText;
+  }
 }
 
 function readAuthActionFromUrl() {
@@ -1234,8 +1274,10 @@ async function restoreSession() {
 async function handleLogin(event) {
   event.preventDefault();
   const form = new FormData(els.loginForm);
+  const submitButton = event.submitter || els.loginForm.querySelector('button[type="submit"]');
 
-  try {
+  setAuthMessage("Accesso in corso...");
+  await withButtonLoading(submitButton, "Accesso...", async () => {
     const data = await fetchJson("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
@@ -1249,17 +1291,21 @@ async function handleLogin(event) {
     els.loginForm.reset();
     await loadPlaylists();
     renderAccount();
+    setAuthMessage(`Accesso effettuato. Ciao ${data.user.displayName}.`, "success");
     setMessage("Accesso effettuato.");
-  } catch (error) {
+  }).catch((error) => {
+    setAuthMessage(error.message, "error");
     setMessage(error.message);
-  }
+  });
 }
 
 async function handleRegister(event) {
   event.preventDefault();
   const form = new FormData(els.registerForm);
+  const submitButton = event.submitter || els.registerForm.querySelector('button[type="submit"]');
 
-  try {
+  setAuthMessage("Creo l'account e preparo la mail di conferma...");
+  await withButtonLoading(submitButton, "Creo...", async () => {
     const data = await fetchJson("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({
@@ -1270,34 +1316,42 @@ async function handleRegister(event) {
     });
     els.registerForm.reset();
     setAuthMode("login");
+    setAuthMessage(data.message || "Controlla la tua email per confermare l'account.", "success");
     setMessage(data.message || "Controlla la tua email per confermare l'account.");
-  } catch (error) {
+  }).catch((error) => {
+    setAuthMessage(error.message, "error");
     setMessage(error.message);
-  }
+  });
 }
 
 async function handleForgotPassword(event) {
   event.preventDefault();
   const form = new FormData(els.forgotForm);
+  const submitButton = event.submitter || els.forgotForm.querySelector('button[type="submit"]');
 
-  try {
+  setAuthMessage("Invio il link di reset...");
+  await withButtonLoading(submitButton, "Invio...", async () => {
     const data = await fetchJson("/api/auth/password/forgot", {
       method: "POST",
       body: JSON.stringify({ email: form.get("email") }),
     });
     els.forgotForm.reset();
     setAuthMode("login");
+    setAuthMessage(data.message, "success");
     setMessage(data.message);
-  } catch (error) {
+  }).catch((error) => {
+    setAuthMessage(error.message, "error");
     setMessage(error.message);
-  }
+  });
 }
 
 async function handleResetPassword(event) {
   event.preventDefault();
   const form = new FormData(els.resetForm);
+  const submitButton = event.submitter || els.resetForm.querySelector('button[type="submit"]');
 
-  try {
+  setAuthMessage("Aggiorno la password...");
+  await withButtonLoading(submitButton, "Aggiorno...", async () => {
     const data = await fetchJson("/api/auth/password/reset", {
       method: "POST",
       body: JSON.stringify({
@@ -1309,23 +1363,27 @@ async function handleResetPassword(event) {
     els.resetForm.reset();
     cleanAuthUrl();
     setAuthMode("login");
+    setAuthMessage(data.message, "success");
     setMessage(data.message);
-  } catch (error) {
+  }).catch((error) => {
+    setAuthMessage(error.message, "error");
     setMessage(error.message);
-  }
+  });
 }
 
 async function handleLogout() {
-  try {
+  await withButtonLoading(els.logoutButton, "Esco...", async () => {
     await fetchJson("/api/auth/logout", { method: "POST" });
-  } catch (error) {
+  }).catch((error) => {
     // Local cleanup still happens if the server session has already expired.
-  }
+  });
   state.sessionToken = "";
   state.user = null;
   state.playlists = [];
   state.selectedTrackForPlaylist = null;
   sessionStorage.removeItem("open-music-session");
+  state.authMessage = "";
+  state.authMessageTone = "neutral";
   renderAccount();
   renderPlaylists();
   setMessage("Logout completato.");

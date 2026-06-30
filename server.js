@@ -204,8 +204,27 @@ async function handleRegister(req, res) {
   await ensureSchema();
   const existing = await query("SELECT id, email_verified_at FROM users WHERE email = $1", [email]);
   if (existing.rowCount) {
+    const existingUser = existing.rows[0];
+    if (existingUser.email_verified_at) {
+      sendJson(res, {
+        error: "Email gia' registrata. Accedi con il tuo account o usa il reset password.",
+      }, 409);
+      return;
+    }
+
+    const token = await createAuthToken(existingUser.id, "verify_email", VERIFY_HOURS * 60);
+    const emailSent = await sendActionEmailSafely(res, {
+      templateId: EMAILJS_VERIFY_TEMPLATE_ID,
+      toEmail: email,
+      displayName,
+      actionUrl: buildFrontendUrl({ verify: token }),
+      purpose: "verification",
+    });
+    if (!emailSent) {
+      return;
+    }
     sendJson(res, {
-      message: "Se i dati sono validi, riceverai una email per completare l'accesso.",
+      message: "Account gia' creato ma non verificato. Ti abbiamo inviato una nuova email di conferma.",
     });
     return;
   }
@@ -218,12 +237,16 @@ async function handleRegister(req, res) {
     [userId, email, displayName, passwordHash],
   );
   const token = await createAuthToken(userId, "verify_email", VERIFY_HOURS * 60);
-  await sendActionEmail({
+  const emailSent = await sendActionEmailSafely(res, {
     templateId: EMAILJS_VERIFY_TEMPLATE_ID,
     toEmail: email,
     displayName,
     actionUrl: buildFrontendUrl({ verify: token }),
+    purpose: "verification",
   });
+  if (!emailSent) {
+    return;
+  }
 
   sendJson(res, {
     message: "Registrazione ricevuta. Controlla la tua email per confermare l'account.",
@@ -260,8 +283,13 @@ async function handleLogin(req, res) {
   const email = normalizeEmail(body.email);
   const password = String(body.password || "");
 
-  if (!email || !password) {
-    sendJson(res, { error: "Email e password sono obbligatorie." }, 400);
+  if (!email) {
+    sendJson(res, { error: "Inserisci un'email valida." }, 400);
+    return;
+  }
+
+  if (!password) {
+    sendJson(res, { error: "Inserisci la password." }, 400);
     return;
   }
 
@@ -269,13 +297,20 @@ async function handleLogin(req, res) {
   const result = await query("SELECT * FROM users WHERE email = $1", [email]);
   const user = result.rows[0];
 
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
-    sendJson(res, { error: "Email o password non validi." }, 401);
+  if (!user) {
+    sendJson(res, { error: "Account inesistente. Registrati prima di accedere." }, 404);
+    return;
+  }
+
+  if (!(await verifyPassword(password, user.password_hash))) {
+    sendJson(res, { error: "Password errata." }, 401);
     return;
   }
 
   if (!user.email_verified_at) {
-    sendJson(res, { error: "Conferma il tuo account dalla email prima di accedere." }, 403);
+    sendJson(res, {
+      error: "Account non verificato. Controlla la mail di conferma oppure registrati di nuovo con la stessa email per riceverne un'altra.",
+    }, 403);
     return;
   }
 
@@ -329,12 +364,16 @@ async function handleForgotPassword(req, res) {
   }
 
   const token = await createAuthToken(user.id, "password_reset", RESET_MINUTES);
-  await sendActionEmail({
+  const emailSent = await sendActionEmailSafely(res, {
     templateId: EMAILJS_RESET_TEMPLATE_ID,
     toEmail: user.email,
     displayName: user.display_name,
     actionUrl: buildFrontendUrl({ reset: token }),
+    purpose: "password reset",
   });
+  if (!emailSent) {
+    return;
+  }
   sendJson(res, generic);
 }
 
@@ -1344,6 +1383,19 @@ async function sendActionEmail({ templateId, toEmail, displayName, actionUrl }) 
 
   if (!response.ok) {
     throw new Error(`EmailJS HTTP ${response.status}: ${await response.text()}`);
+  }
+}
+
+async function sendActionEmailSafely(res, payload) {
+  try {
+    await sendActionEmail(payload);
+    return true;
+  } catch (error) {
+    console.error(`EmailJS ${payload.purpose || "email"} failed:`, error);
+    sendJson(res, {
+      error: "Non siamo riusciti a inviare l'email. Controlla Service ID, Template ID, chiavi EmailJS e il campo To email del template.",
+    }, 502);
+    return false;
   }
 }
 

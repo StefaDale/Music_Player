@@ -16,7 +16,7 @@
 | **Production frontend** | `https://stefadale.github.io/Music_Player/` |
 | **Production backend** | `https://music-player-2mhu.onrender.com` |
 | **Expected hosting** | GitHub Pages for the static frontend, Render for the Node.js backend |
-| **Current status** | Working online according to the repository configuration. `config.js` points to the Render backend; the backend exposes JSON APIs, also serves static files locally/on Render, uses `YOUTUBE_API_KEY` only server-side, and allows CORS through `CORS_ORIGIN` or `*` by default. |
+| **Current status** | Working online according to the repository configuration. `config.js` points to the Render backend; the backend exposes JSON APIs, also serves static files locally/on Render, uses `YOUTUBE_API_KEY` only server-side, and allows CORS through `CORS_ORIGIN` or `*` by default. GitHub issues #1-#6 are resolved and closed with the `bug` + `fixed` labels. |
 
 ---
 
@@ -48,7 +48,7 @@
 ```text
 Deezer/
 |-- index.html             # Main interface: topbar, search, results, player, lyrics, queue/favorites
-|-- styles.css             # Responsive styles and UI components; includes unused residual CSS for account/profile/playlist
+|-- styles.css             # Responsive styles and UI components currently connected to the markup
 |-- app.js                 # Frontend logic: API config, search, YouTube/audio player, queue, favorites, lyrics, localStorage
 |-- config.js              # Frontend global config with the Render backend URL for non-localhost environments
 |-- server.js              # Node.js backend: config/search/stream/lyrics APIs + whitelisted static file serving
@@ -201,7 +201,7 @@ Access-Control-Allow-Headers: Content-Type
   - not age restricted;
   - duration between 45 and 900 seconds.
 - YouTube results are sorted with local scoring based on token coverage, artist/title matches, official terms, penalties for unwanted lyrics/live results, cover/tutorial/reaction terms, Topic channels, and play count.
-- If YouTube produces results, the response mixes up to about 65% YouTube results and the rest Audius backups, within `limit`.
+- If YouTube produces results, the response goes through `mergeSearchResults()`: it keeps YouTube priority up to about 65% of `limit`, adds Audius as backup, and avoids duplicates with normalized artist/title keys.
 - If YouTube is not configured or returns no usable results, the response uses Audius.
 - The response includes `youtubeError` when YouTube search fails.
 
@@ -215,7 +215,7 @@ Access-Control-Allow-Headers: Content-Type
 **YouTube** results:
 
 - `id: "youtube:<videoId>"`, `source: "youtube"`, `youtubeId`, `title`, `artist`, `album: "YouTube"`, `cover`, `coverBig`, `duration`, `stream: ""`, `link`, `playCount`, `favoriteCount`, `genre: "YouTube"`, `embeddable`.
-- `parseYouTubeTitle()` splits artist and title using `" - "` and also contains an en dash separator that appears in the file as a possible encoding/mojibake artifact. Verify it before changing parsing behavior.
+- `parseYouTubeTitle()` splits artist and title using common separators: hyphen (`" - "`), en dash (`" \u2013 "`), and em dash (`" \u2014 "`), while keeping the source file ASCII-safe through Unicode escapes.
 
 ### Lyrics
 
@@ -241,7 +241,7 @@ Access-Control-Allow-Headers: Content-Type
   - results pane;
   - side pane with now playing, lyrics, queue/favorites;
   - fixed bottom player controls.
-- The markup does not contain a `#resultCount` element; `app.js` supports it optionally and does not fail when it is missing.
+- The markup contains a visible `#resultCount` element in the results heading; `app.js` updates it optionally and still does not fail if it is missing.
 
 ### Frontend State
 
@@ -292,6 +292,7 @@ The frontend fetch timeout is `70000` ms.
 - YouTube uses the IFrame Player API loaded dynamically from `https://www.youtube.com/iframe_api`.
 - Shared controls handle play/pause, previous, next, seek, and volume.
 - For YouTube, a 500 ms timer updates timeline and active lyrics.
+- Seeking is centralized in `seekToPlaybackTime()`: it uses `youtubePlayer.seekTo()` for YouTube tracks and `audio.currentTime` for Audius.
 - YouTube errors 101/150 show an embed-disallowed message; error 100 indicates an unavailable/private video.
 
 ### Queue, Favorites, And Lyrics
@@ -301,19 +302,16 @@ The frontend fetch timeout is `70000` ms.
 - Favorites are saved in `localStorage`.
 - Lyrics are searched for each track with `track`, `artist`, and `duration`.
 - Synchronized lyrics are parsed from `[mm:ss.xxx] text` lines.
-- Clicking a synchronized lyric line sets `els.audio.currentTime`; currently, for YouTube tracks, lyric-line seeking does not call `youtubePlayer.seekTo`.
+- Clicking a synchronized lyric line uses `seekToPlaybackTime()`, so it works with both YouTube (`youtubePlayer.seekTo()`) and Audius (`audio.currentTime`).
 
 ### CSS And Responsiveness
 
 - Dark theme with red, green, and yellow accents.
 - Desktop layout: results + sidebar.
 - Main breakpoints: `1040px`, `760px`, `420px`.
-- The fixed player hides volume below `1040px` and compacts on mobile.
+- The fixed player hides volume below `1040px`, compacts on mobile, uses safe-area insets for bottom spacing, and includes a dedicated low-height mobile media query (`max-height: 480px`).
 - Tooltips are based on `data-tooltip`.
-- Residual CSS exists but is not connected to current markup:
-  - `.account`, `.account-button`, `.profile`
-  - `.library-toolbar`
-  - `.playlist-list`, `.playlist-item`, `.playlist-title`, `.playlist-meta`
+- Residual CSS that was not connected to the current markup for account/profile/playlist UI has been removed.
 
 ---
 
@@ -326,11 +324,14 @@ The frontend fetch timeout is `70000` ms.
 - Audius playback through backend stream redirects.
 - Playback queue.
 - Local favorites.
+- Visible search result count.
 - Source link for each track.
 - Artwork, duration, and play/view count when available.
 - LRCLIB plain or synchronized lyrics.
+- Seeking from synchronized lyric lines for YouTube and Audius.
 - Active synchronized lyric highlighting during playback.
 - Responsive desktop/mobile UI.
+- Backend deduplication for mixed YouTube/Audius results through normalized artist/title keys.
 - Expected GitHub Pages + Render deployment.
 - `robots` meta tag with `noindex, nofollow`.
 
@@ -345,7 +346,7 @@ The frontend fetch timeout is `70000` ms.
 - `CORS_ORIGIN` in production should be set to the GitHub Pages origin, for example `https://stefadale.github.io`.
 - If the backend does not respond, the frontend shows different messages for local files, localhost, and remote backend usage.
 - `README.txt` and `README_IT.txt` are operational docs; these two `PROJECT_CONTEXT*` files are the complete resume context.
-- At audit time, the working tree had pre-existing README changes: removal of the specific "Fabri Fibra" reference in the YouTube section.
+- GitHub issues #1-#6 were used to track recent fixes: mobile interface, YouTube title parsing, YouTube lyric seeking, result count, CSS cleanup, and result deduplication.
 
 ---
 
@@ -356,6 +357,7 @@ Useful commands:
 ```bash
 npm run check
 npm start
+npm run build:android-web
 ```
 
 Recommended manual checks after functional changes:
@@ -377,14 +379,12 @@ Recommended manual checks after functional changes:
 | June 29, 2026 | Codex | Created the music app, configured YouTube/Audius/LRCLIB, added the Node.js backend, responsive UI, GitHub Pages + Render deployment, and operational documentation. |
 | June 29, 2026 | Codex | Added the `noindex,nofollow` meta tag, copied the Italian README, translated the README to English, and generated the IT/EN context documents. |
 | June 30, 2026 | Codex | Completed a full repository audit and realigned the IT/EN context documents with actual structure, endpoints, configuration, frontend, backend, limits, and observed technical debt. |
+| June 30, 2026 | Codex | Resolved issues #1-#6: mobile player, YouTube title parsing, YouTube lyric seeking, result count, residual CSS removal, and YouTube/Audius result deduplication; regenerated Capacitor assets with `npm run build:android-web`. |
 
 ---
 
 ## Recommended Next Steps
 
-- Fix or confirm the encoding/mojibake artifact in the en dash separator inside `parseYouTubeTitle()`.
-- Decide whether to reintroduce a visible `#resultCount` element or remove the optional logic from `app.js`.
-- Remove residual CSS for account/profile/playlist if those features are not planned soon.
-- Use `youtubePlayer.seekTo()` when clicking a synchronized lyric line for a YouTube track.
-- Improve ranking and deduplication between YouTube and Audius results.
+- Further improve fuzzy ranking and deduplication between YouTube and Audius results, beyond the current exact normalized artist/title deduplication.
+- Verify a debug APK build with JDK 11+ configured.
 - Consider a custom domain.

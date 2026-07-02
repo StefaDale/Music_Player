@@ -214,8 +214,7 @@ function bindEvents() {
   });
 
   els.volumeRange.addEventListener("input", () => {
-    els.audio.volume = Number(els.volumeRange.value);
-    updateRangeProgress(els.volumeRange);
+    applyVolume();
   });
 
   els.audio.addEventListener("play", () => {
@@ -275,8 +274,7 @@ function bindEvents() {
     renderCredit();
   });
 
-  els.audio.volume = Number(els.volumeRange.value);
-  updateRangeProgress(els.volumeRange);
+  applyVolume();
   updateRangeProgress(els.seekRange);
 }
 
@@ -1053,6 +1051,7 @@ function ensureYouTubePlayer() {
     events: {
       onReady: () => {
         youtubePlayerReady = true;
+        applyVolume();
         if (pendingYouTubeTrack) {
           startYouTubePlayback(pendingYouTubeTrack);
         }
@@ -1078,8 +1077,18 @@ function startYouTubePlayback(track) {
   }
 
   youtubePlayer.loadVideoById(track.youtubeId);
+  applyVolume();
   youtubePlayer.playVideo();
   startYouTubeTimer();
+}
+
+function applyVolume() {
+  const volume = Math.min(1, Math.max(0, Number(els.volumeRange.value || 0)));
+  els.audio.volume = volume;
+  if (youtubePlayer?.setVolume) {
+    youtubePlayer.setVolume(Math.round(volume * 100));
+  }
+  updateRangeProgress(els.volumeRange);
 }
 
 function handleYouTubeError(event) {

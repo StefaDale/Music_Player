@@ -612,7 +612,7 @@ function renderPlaylists() {
   els.viewAllPlaylistsButton.hidden = false;
 
   if (!state.user) {
-    els.playlistEmpty.textContent = "Accedi per salvare playlist private.";
+    els.playlistEmpty.textContent = getAuthPromptMessage();
     els.playlistEmpty.hidden = false;
     renderPlaylistOverlay();
     return;
@@ -754,7 +754,7 @@ function renderAccount() {
     const usernameLabel = state.user.username ? ` (@${state.user.username})` : "";
     els.authStatus.textContent = `Ciao ${state.user.displayName}${usernameLabel}. Playlist sincronizzate e private.`;
   } else {
-    els.authStatus.textContent = "Accedi per salvare playlist private.";
+    els.authStatus.textContent = getAuthPromptMessage();
   }
 
   const modes = ["login", "register", "forgot", "reset"];
@@ -771,6 +771,12 @@ function renderAccount() {
   els.resetForm.classList.toggle("active", state.authMode === "reset");
   els.loginModeButton.classList.toggle("active", state.authMode === "login");
   els.registerModeButton.classList.toggle("active", state.authMode === "register");
+}
+
+function getAuthPromptMessage() {
+  return state.authMode === "register"
+    ? "Registrati per salvare playlist private."
+    : "Accedi per salvare playlist private.";
 }
 
 function renderSearch() {
@@ -1397,6 +1403,7 @@ function setAuthMode(mode) {
   state.authMessage = "";
   state.authMessageTone = "neutral";
   renderAccount();
+  renderPlaylists();
 }
 
 function setAuthMessage(message, tone = "neutral") {
@@ -1512,8 +1519,7 @@ async function handleRegister(event) {
     });
     els.registerForm.reset();
     setAuthMode("login");
-    setAuthMessage(data.message || "Controlla la tua email per confermare l'account.", "success");
-    setMessage(data.message || "Controlla la tua email per confermare l'account.");
+    setAuthMessage(data.message || "Controlla la tua email per confermare l'account, anche nella cartella spam.", "success");
   }).catch((error) => {
     setAuthMessage(error.message, "error");
     setMessage(error.message);

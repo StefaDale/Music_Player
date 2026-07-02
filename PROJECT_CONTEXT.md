@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md
 
 > Documento di contesto per permettere a qualsiasi IA o sviluppatore di riprendere il progetto senza ulteriori spiegazioni.
-> Ultimo aggiornamento: 30 giugno 2026.
+> Ultimo aggiornamento: 2 luglio 2026.
 
 ---
 
@@ -15,7 +15,7 @@
 | **Frontend produzione** | `https://stefadale.github.io/Music_Player/` |
 | **Backend produzione** | `https://music-player-2mhu.onrender.com` |
 | **Hosting** | GitHub Pages per frontend statico; Render per backend Node; Neon per database Postgres |
-| **Stato attuale** | UI modernizzata con navbar, ricerca espandibile da icona, dropdown account/playlist, conferma email, reset password e playlist private implementati nel codice. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
+| **Stato attuale** | UI modernizzata con navbar, ricerca espandibile da icona, dropdown account/playlist, conferma email, reset password e playlist private implementati nel codice. Il flusso registrazione invita a controllare anche lo spam e mantiene il messaggio nel pannello Account. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
 
 ---
 
@@ -243,6 +243,8 @@ action_url
 
 Se EmailJS non e' configurato, registrazione e reset password rispondono `503` e non creano flussi incompleti.
 
+La risposta di registrazione dice all'utente di controllare anche la cartella spam. Nel frontend il messaggio di registrazione riuscita resta nel pannello Account e non viene copiato nel messaggio globale sopra i risultati.
+
 ---
 
 ## Frontend
@@ -307,6 +309,7 @@ Playlist e account non vengono salvati in `localStorage`; arrivano dal backend.
 - Se non loggato, `Aggiungi a playlist` porta al login.
 - Se loggato ma senza playlist, apre il form nuova playlist.
 - Il dropdown playlist mostra le 4 playlist piu' recenti; l'overlay mostra lista completa e dettaglio playlist.
+- Se l'utente non e' loggato, il prompt playlist/account cambia in base alla tab auth: `Accedi per salvare playlist private.` oppure `Registrati per salvare playlist private.`.
 
 ---
 
@@ -331,6 +334,7 @@ Controlli manuali:
 
 ## Stato Verifiche Ultime
 
+- `npm run check` passato il 2 luglio 2026 dopo le rifiniture ai messaggi di registrazione/account.
 - `npm run check` passato dopo implementazione auth/playlist/UI.
 - Verifica HTTP temporanea su porta alternativa ha risposto con i nuovi campi:
 
@@ -351,6 +355,7 @@ Controlli manuali:
 | 30 giugno 2026 | Codex | Audit repository e riallineamento contesti con struttura reale. |
 | 30 giugno 2026 | Codex | Fix issue #1-#6: mobile player, parsing YouTube, seek lyrics, conteggio risultati, pulizia CSS, deduplicazione. |
 | 30 giugno 2026 | Codex | Modernizzazione UI, ricerca animata, account, password hashate, EmailJS, Neon Postgres e playlist private. |
+| 2 luglio 2026 | Codex | Rifiniture UX auth: avviso cartella spam nella registrazione, prompt Accedi/Registrati dinamico e messaggio di conferma mostrato solo nel pannello Account. |
 
 ---
 

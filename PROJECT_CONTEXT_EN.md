@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT_EN.md
 
 > Context document so any AI or developer can resume the project without extra explanation.
-> Last update: June 30, 2026.
+> Last update: July 2, 2026.
 
 ---
 
@@ -15,7 +15,7 @@
 | **Production frontend** | `https://stefadale.github.io/Music_Player/` |
 | **Production backend** | `https://music-player-2mhu.onrender.com` |
 | **Hosting** | GitHub Pages for static frontend; Render for Node backend; Neon for Postgres database |
-| **Current status** | Modern UI with navbar, icon-expanded search, account/playlist dropdowns, email confirmation, password reset, and private playlists are implemented in code. Render/Neon/EmailJS variables must be configured to activate auth and playlists in production. |
+| **Current status** | Modern UI with navbar, icon-expanded search, account/playlist dropdowns, email confirmation, password reset, and private playlists are implemented in code. The registration flow tells users to check spam too and keeps the confirmation message inside the Account panel. Render/Neon/EmailJS variables must be configured to activate auth and playlists in production. |
 
 ---
 
@@ -243,6 +243,8 @@ action_url
 
 If EmailJS is not configured, registration and password reset return `503` and do not create incomplete flows.
 
+The registration response tells users to check their spam folder too. In the frontend, the successful registration message stays in the Account panel and is not copied into the global message above the results.
+
 ---
 
 ## Frontend
@@ -307,6 +309,7 @@ Playlists and account data are not saved in `localStorage`; they come from the b
 - If not logged in, `Add to playlist` moves the user to login.
 - If logged in but no playlist exists, it opens the new playlist form.
 - The playlist dropdown displays the 4 most recent playlists; the overlay displays the full list and playlist detail.
+- If the user is not logged in, the playlist/account prompt follows the active auth tab: `Accedi per salvare playlist private.` or `Registrati per salvare playlist private.`.
 
 ---
 
@@ -331,6 +334,7 @@ Manual checks:
 
 ## Latest Verification State
 
+- `npm run check` passed on July 2, 2026 after registration/account message refinements.
 - `npm run check` passed after auth/playlist/UI implementation.
 - A temporary HTTP verification on an alternate port returned the new fields:
 
@@ -351,6 +355,7 @@ Manual checks:
 | June 30, 2026 | Codex | Audited repository and realigned context files with actual structure. |
 | June 30, 2026 | Codex | Fixed issues #1-#6: mobile player, YouTube parsing, lyric seeking, result count, CSS cleanup, deduplication. |
 | June 30, 2026 | Codex | Modernized UI, animated search, accounts, hashed passwords, EmailJS, Neon Postgres, and private playlists. |
+| July 2, 2026 | Codex | Refined auth UX: spam-folder notice on registration, dynamic Login/Register prompt, and confirmation message shown only in the Account panel. |
 
 ---
 

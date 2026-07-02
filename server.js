@@ -268,7 +268,7 @@ async function handleRegister(req, res) {
   }
 
   sendJson(res, {
-    message: "Registrazione ricevuta. Controlla la tua email per confermare l'account.",
+    message: "Registrazione ricevuta. Controlla la tua email per confermare l'account, anche nella cartella spam.",
   }, 201);
 }
 

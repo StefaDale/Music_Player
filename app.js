@@ -1225,15 +1225,14 @@ function parseSyncedLyrics(value) {
     .filter(Boolean);
 }
 
-function updateActiveLyric() {
+function updateActiveLyric(currentTime = getPlaybackTime()) {
   if (!state.lyrics.lines.length) {
     return;
   }
 
-  const current = getPlaybackTime();
   let index = state.lyrics.lines.findIndex((line, lineIndex) => {
     const next = state.lyrics.lines[lineIndex + 1];
-    return current >= line.time && (!next || current < next.time);
+    return currentTime >= line.time && (!next || currentTime < next.time);
   });
 
   if (index < 0) {
@@ -1868,12 +1867,20 @@ function seekToPlaybackTime(time) {
 
   if (state.currentTrack?.source === "youtube" && youtubePlayer?.seekTo) {
     youtubePlayer.seekTo(targetTime, true);
+    youtubePlayer.playVideo?.();
   } else if (Number.isFinite(els.audio.duration)) {
     els.audio.currentTime = targetTime;
+    if (els.audio.paused) {
+      els.audio.play().catch(() => {
+        setMessage("Il browser richiede un click per avviare l'audio.");
+      });
+    }
   }
 
-  updateTimeline();
-  updateActiveLyric();
+  els.seekRange.value = targetTime;
+  els.currentTime.textContent = formatTime(targetTime);
+  updateRangeProgress(els.seekRange);
+  updateActiveLyric(targetTime);
 }
 
 function formatTime(seconds) {

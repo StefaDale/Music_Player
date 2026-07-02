@@ -15,7 +15,7 @@
 | **Frontend produzione** | `https://stefadale.github.io/Music_Player/` |
 | **Backend produzione** | `https://music-player-2mhu.onrender.com` |
 | **Hosting** | GitHub Pages per frontend statico; Render per backend Node; Neon per database Postgres |
-| **Stato attuale** | UI modernizzata con navbar, ricerca espandibile da icona, dropdown account/playlist, conferma email, reset password e playlist private implementati nel codice. Il flusso registrazione invita a controllare anche lo spam e mantiene il messaggio nel pannello Account. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
+| **Stato attuale** | UI modernizzata con navbar compatta su scroll, ricerca live full-width con overlay blur, dropdown account/playlist, conferma email, reset password, playlist private e ripristino posizione playback implementati nel codice. Il flusso registrazione invita a controllare anche lo spam e mantiene il messaggio nel pannello Account. Serve configurare variabili Render/Neon/EmailJS per attivare auth e playlist in produzione. |
 
 ---
 
@@ -38,9 +38,9 @@
 
 ```text
 Deezer/
-|-- index.html             # UI: navbar, ricerca espandibile, risultati, player, testi, coda, dropdown playlist/account
-|-- styles.css             # Tema music app dark, responsive, animazioni mirate e pannelli UI
-|-- app.js                 # Frontend: ricerca, player, auth, sessionStorage, playlist, coda locale, lyrics
+|-- index.html             # UI: navbar, ricerca live overlay, risultati, player, testi, coda, dropdown playlist/account
+|-- styles.css             # Tema music app dark, responsive, scrollbar tematizzate, animazioni mirate e pannelli UI
+|-- app.js                 # Frontend: ricerca live, player, auth, sessionStorage, playlist, coda locale, lyrics, posizione playback
 |-- config.js              # API_BASE_URL per frontend non-localhost
 |-- server.js              # Backend: statici, ricerca, stream, lyrics, auth, EmailJS, playlist
 |-- package.json           # Script npm e dipendenze, incluso `pg`
@@ -254,6 +254,8 @@ La risposta di registrazione dice all'utente di controllare anche la cartella sp
 - Titolo pagina: `Open Music`.
 - Brand piu' grande con font di sistema privacy-friendly.
 - Ricerca chiusa di default, apertura da pulsante icona con animazione.
+- Ricerca live full-width con overlay blur, risultati in righe scrollabili e debounce durante la digitazione.
+- Navbar che collassa in controlli flottanti compatti dopo scroll verso il basso e torna completa quando si risale.
 - Pannello risultati.
 - Sidebar con:
   - now playing;
@@ -262,6 +264,8 @@ La risposta di registrazione dice all'utente di controllare anche la cartella sp
   - playlist;
   - account.
 - Player fisso in basso.
+- Player con icone coerenti col tema, tooltip leggibili, volume funzionante su audio nativo e YouTube.
+- Scrollbar tematizzate e discrete su pagina, dropdown, lyrics, ricerca overlay e playlist overlay.
 - Rimossi testi utente `YouTube / Audius` e tab `Preferiti`.
 
 ### Stato Frontend
@@ -278,38 +282,52 @@ In memoria:
 - `accountsConfigured`
 - `youtubeConfigured`
 - `searchOpen`
+- `navCollapsed`
 - `authMode`
 - `sessionToken`
 - `user`
 - `resetToken`
 - `lyrics`
 - `youtubeReady`
+- `restoredTrackNeedsRefresh`
+- `restoredPlaybackTime`
 
 Persistenza:
 
-- `localStorage.open-music-player-state`: solo `currentTrack` e `queue`.
+- `localStorage.open-music-player-state`: `currentTrack`, `queue` e `playbackTime`.
 - `sessionStorage.open-music-session`: token sessione corrente.
 
 Playlist e account non vengono salvati in `localStorage`; arrivano dal backend.
 
 ### Flusso Iniziale
 
-1. Ripristina coda/player da `localStorage`.
+1. Ripristina coda/player e posizione playback da `localStorage`.
 2. Legge eventuali `?verify=...` o `?reset=...`.
 3. Collega event listener.
 4. Render iniziale.
 5. Carica YouTube IFrame API.
 6. Chiama `/api/config`.
 7. Ripristina sessione con `/api/auth/me` se il token esiste.
-8. Cerca `top hits italia`.
+8. Per utenti loggati con playlist, genera una ricerca home personalizzata da artisti/generi salvati; altrimenti cerca `top hits italia`.
 
 ### Playlist UI
 
 - Menu traccia: `Riproduci`, `Aggiungi alla coda`, `Aggiungi a playlist`, `Apri sorgente`.
 - Se non loggato, `Aggiungi a playlist` porta al login.
+- Se non loggato, `Nuova` playlist e submit creazione sono bloccati/disabilitati.
 - Se loggato ma senza playlist, apre il form nuova playlist.
-- Il dropdown playlist mostra le 4 playlist piu' recenti; l'overlay mostra lista completa e dettaglio playlist.
+- Il dropdown playlist mostra le 3 playlist piu' rilevanti; l'overlay mostra lista completa e dettaglio playlist.
 - Se l'utente non e' loggato, il prompt playlist/account cambia in base alla tab auth: `Accedi per salvare playlist private.` oppure `Registrati per salvare playlist private.`.
+
+### Playback e Lyrics
+
+- I brani ripristinati da `localStorage` vengono rinfrescati via nuova ricerca prima della prima riproduzione, quando possibile.
+- La posizione playback viene salvata durante `timeupdate` e dopo seek manuale; viene ripristinata su audio nativo dopo `loadedmetadata` e su YouTube all'avvio del player.
+- La posizione salvata viene azzerata se e' vicino alla fine del brano, per evitare ripartenze a fine traccia.
+- Il controllo volume usa un helper unico che applica il valore sia a `audio.volume` sia a `youtubePlayer.setVolume()`.
+- Il click su una riga lyrics sincronizzata cerca/riprende il playback e aggiorna subito la riga attiva usando il timestamp cliccato.
+- L'autoscroll lyrics resta confinato dentro `.lyrics-box` e non usa piu' `scrollIntoView`, evitando scroll dell'intera pagina.
+- Durante annunci/stati intermedi YouTube, il controllo pausa prova a gestire `PLAYING`, `BUFFERING` e `CUED`; se YouTube non consente la pausa dell'ad, viene mostrato un messaggio esplicativo.
 
 ---
 
@@ -328,12 +346,14 @@ Controlli manuali:
 - Verificare `http://127.0.0.1:4173/api/config`.
 - Controllare che `/api/config` includa `accountsConfigured` ed `emailConfigured` dopo restart del server.
 - Provare ricerca, riproduzione, coda, lyrics.
+- Provare ricerca live overlay, navbar compatta su scroll, volume Audius/YouTube, ripristino posizione dopo reload e click su lyrics sincronizzate.
 - Dopo configurazione Neon/EmailJS: registrazione, conferma email, login, playlist, reset password.
 
 ---
 
 ## Stato Verifiche Ultime
 
+- `npm run check` passato il 2 luglio 2026 dopo la risoluzione delle issue GitHub #7-#21.
 - `npm run check` passato il 2 luglio 2026 dopo le rifiniture ai messaggi di registrazione/account.
 - `npm run check` passato dopo implementazione auth/playlist/UI.
 - Verifica HTTP temporanea su porta alternativa ha risposto con i nuovi campi:
@@ -356,6 +376,7 @@ Controlli manuali:
 | 30 giugno 2026 | Codex | Fix issue #1-#6: mobile player, parsing YouTube, seek lyrics, conteggio risultati, pulizia CSS, deduplicazione. |
 | 30 giugno 2026 | Codex | Modernizzazione UI, ricerca animata, account, password hashate, EmailJS, Neon Postgres e playlist private. |
 | 2 luglio 2026 | Codex | Rifiniture UX auth: avviso cartella spam nella registrazione, prompt Accedi/Registrati dinamico e messaggio di conferma mostrato solo nel pannello Account. |
+| 2 luglio 2026 | Codex | Risoluzione issue GitHub #7-#21: playlist sloggato, tooltip, home personalizzata, scrollbar, navbar compatta, ricerca live overlay, YouTube ads, lyrics, volume, restore brano e posizione playback. |
 
 ---
 

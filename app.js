@@ -220,6 +220,14 @@ function bindEvents() {
   });
 
   els.newPlaylistButton.addEventListener("click", () => {
+    if (!state.user) {
+      els.playlistForm.hidden = true;
+      els.playlistEmpty.textContent = getAuthPromptMessage();
+      els.playlistEmpty.hidden = false;
+      setAuthMode("login");
+      return;
+    }
+
     els.playlistForm.hidden = !els.playlistForm.hidden;
     if (!els.playlistForm.hidden) {
       els.playlistNameInput.focus();
@@ -604,7 +612,8 @@ function createMiniTrack(track, options) {
 
 function renderPlaylists() {
   els.playlistList.innerHTML = "";
-  els.playlistTarget.hidden = !state.selectedTrackForPlaylist;
+  els.newPlaylistButton.disabled = !state.user;
+  els.playlistTarget.hidden = !state.user || !state.selectedTrackForPlaylist;
   els.addToPlaylistButton.disabled = !state.playlists.length || !state.selectedTrackForPlaylist;
   els.playlistSelect.innerHTML = state.playlists
     .map((playlist) => `<option value="${escapeAttribute(playlist.id)}">${escapeHtml(playlist.name)}</option>`)
@@ -612,6 +621,7 @@ function renderPlaylists() {
   els.viewAllPlaylistsButton.hidden = false;
 
   if (!state.user) {
+    els.playlistForm.hidden = true;
     els.playlistEmpty.textContent = getAuthPromptMessage();
     els.playlistEmpty.hidden = false;
     renderPlaylistOverlay();
@@ -1246,6 +1256,14 @@ function selectTrackForPlaylist(track) {
 
 async function handleCreatePlaylist(event) {
   event.preventDefault();
+  if (!state.user) {
+    els.playlistForm.hidden = true;
+    els.playlistEmpty.textContent = getAuthPromptMessage();
+    els.playlistEmpty.hidden = false;
+    setAuthMode("login");
+    return;
+  }
+
   const submitButton = event.submitter || els.playlistForm.querySelector('button[type="submit"]');
   const name = els.playlistNameInput.value.trim();
   if (!name) {

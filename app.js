@@ -1,5 +1,6 @@
 const STORAGE_KEY = "open-music-player-state";
 const DEFAULT_QUERY = "top hits italia";
+const PERSONALIZED_PLAYLIST_LIMIT = 3;
 const REQUEST_TIMEOUT_MS = 70000;
 const API_BASE_URL = getApiBaseUrl();
 
@@ -121,8 +122,10 @@ async function init() {
   renderAll();
   loadYouTubeApi();
   await detectServer();
-  await restoreSession();
-  runSearch(DEFAULT_QUERY, { syncInput: false });
+  const hasPersonalizedHome = await restoreSession();
+  if (!hasPersonalizedHome) {
+    runSearch(DEFAULT_QUERY, { syncInput: false });
+  }
 }
 
 function bindEvents() {
@@ -636,7 +639,7 @@ function renderPlaylists() {
   }
 
   els.playlistEmpty.hidden = true;
-  state.playlists.slice(0, 4).forEach((playlist) => {
+  getRelevantPlaylists().forEach((playlist) => {
     const article = document.createElement("article");
     article.className = "playlist-card compact-playlist-card";
     article.innerHTML = `
@@ -1349,6 +1352,62 @@ async function loadPlaylists() {
   }
 }
 
+async function loadPersonalizedHome() {
+  const query = getPersonalizedHomeQuery();
+  if (!query) {
+    return false;
+  }
+
+  await runSearch(query, { syncInput: false });
+  setMessage("Consigli personalizzati dalle tue playlist. Scegli un brano o aggiungilo a una playlist.");
+  return true;
+}
+
+function getPersonalizedHomeQuery() {
+  if (!state.user) {
+    return "";
+  }
+
+  const playlistTracks = getRelevantPlaylists()
+    .flatMap((playlist) => playlist.tracks.map((entry) => entry.track))
+    .filter(Boolean);
+
+  if (!playlistTracks.length) {
+    return "";
+  }
+
+  const artists = getTopValues(playlistTracks.map((track) => track.artist), 2);
+  const genres = getTopValues(
+    playlistTracks
+      .map((track) => track.genre)
+      .filter((genre) => genre && genre.toLowerCase() !== "youtube"),
+    1,
+  );
+  const terms = [...artists, ...genres, "hits"].filter(Boolean);
+  return terms.length > 1 ? terms.join(" ") : "";
+}
+
+function getRelevantPlaylists() {
+  return [...state.playlists]
+    .sort((a, b) => b.tracks.length - a.tracks.length)
+    .slice(0, PERSONALIZED_PLAYLIST_LIMIT);
+}
+
+function getTopValues(values, limit) {
+  const counts = new Map();
+  values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .forEach((value) => {
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([value]) => value);
+}
+
 function toggleNavDropdown(name) {
   state.activeDropdown = state.activeDropdown === name ? "" : name;
   if (state.activeDropdown) {
@@ -1477,18 +1536,20 @@ async function verifyAccount(token) {
 async function restoreSession() {
   if (!state.sessionToken || !state.accountsConfigured) {
     renderAccount();
-    return;
+    return false;
   }
 
   try {
     const data = await fetchJson("/api/auth/me");
     state.user = data.user;
     await loadPlaylists();
+    return await loadPersonalizedHome();
   } catch (error) {
     state.sessionToken = "";
     sessionStorage.removeItem("open-music-session");
   }
   renderAccount();
+  return false;
 }
 
 async function handleLogin(event) {
@@ -1512,7 +1573,9 @@ async function handleLogin(event) {
     await loadPlaylists();
     renderAccount();
     setAuthMessage(`Accesso effettuato. Ciao ${data.user.displayName}.`, "success");
-    setMessage("Accesso effettuato.");
+    if (!(await loadPersonalizedHome())) {
+      setMessage("Accesso effettuato.");
+    }
   }).catch((error) => {
     setAuthMessage(error.message, "error");
     setMessage(error.message);

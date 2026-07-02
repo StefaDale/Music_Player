@@ -3,6 +3,7 @@ const DEFAULT_QUERY = "top hits italia";
 const PERSONALIZED_PLAYLIST_LIMIT = 3;
 const NAV_COLLAPSE_SCROLL_Y = 220;
 const NAV_RESTORE_SCROLL_DELTA = 12;
+const LIVE_SEARCH_DEBOUNCE_MS = 360;
 const REQUEST_TIMEOUT_MS = 70000;
 const API_BASE_URL = getApiBaseUrl();
 
@@ -54,6 +55,7 @@ let youtubePlayerReady = false;
 let pendingYouTubeTrack = null;
 let youtubeProgressTimer = null;
 let lastScrollY = window.scrollY || 0;
+let liveSearchTimer = 0;
 
 const els = {
   audio: document.getElementById("audio"),
@@ -64,6 +66,9 @@ const els = {
   accountDropdown: document.getElementById("accountDropdown"),
   searchToggle: document.getElementById("searchToggle"),
   searchForm: document.getElementById("searchForm"),
+  searchOverlay: document.getElementById("searchOverlay"),
+  searchOverlayBackdrop: document.getElementById("searchOverlayBackdrop"),
+  searchOverlayResults: document.getElementById("searchOverlayResults"),
   searchInput: document.getElementById("searchInput"),
   resultCount: document.getElementById("resultCount"),
   resultsList: document.getElementById("resultsList"),
@@ -161,6 +166,8 @@ function bindEvents() {
     event.preventDefault();
     runSearch(els.searchInput.value.trim());
   });
+  els.searchInput.addEventListener("input", scheduleLiveSearch);
+  els.searchOverlayBackdrop.addEventListener("click", () => setSearchOpen(false, { focusToggle: true }));
 
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".track-menu")) {
@@ -422,10 +429,48 @@ function renderAll() {
 
 function renderResults() {
   els.resultsList.innerHTML = "";
+  els.searchOverlayResults.innerHTML = "";
 
   state.results.forEach((track) => {
     els.resultsList.appendChild(createTrackCard(track));
+    els.searchOverlayResults.appendChild(createSearchResultRow(track));
   });
+
+  if (state.searchOpen && !state.results.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note search-overlay-empty";
+    empty.textContent = els.searchForm.classList.contains("is-loading")
+      ? "Cerco brani..."
+      : "Scrivi per cercare brani, artisti o playlist.";
+    els.searchOverlayResults.appendChild(empty);
+  }
+}
+
+function createSearchResultRow(track) {
+  const row = document.createElement("article");
+  row.className = "search-result-row";
+  row.tabIndex = 0;
+  row.setAttribute("aria-label", `Riproduci ${track.title}`);
+  row.innerHTML = `
+    <img src="${escapeAttribute(track.cover)}" alt="">
+    <span>
+      <strong>${escapeHtml(track.title)}</strong>
+      <small>${escapeHtml(track.artist)}${track.album ? ` - ${escapeHtml(track.album)}` : ""}</small>
+    </span>
+    <small>${formatTime(track.duration)}</small>
+  `;
+  row.addEventListener("click", () => {
+    playTrack(track);
+    setSearchOpen(false);
+  });
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      playTrack(track);
+      setSearchOpen(false);
+    }
+  });
+  return row;
 }
 
 function createTrackCard(track) {
@@ -808,10 +853,28 @@ function getAuthPromptMessage() {
 
 function renderSearch() {
   document.body.classList.toggle("search-open", state.searchOpen);
+  els.searchOverlay.hidden = !state.searchOpen;
   els.searchForm.setAttribute("aria-hidden", String(!state.searchOpen));
   els.searchToggle.setAttribute("aria-expanded", String(state.searchOpen));
   els.searchToggle.setAttribute("aria-label", state.searchOpen ? "Chiudi ricerca" : "Apri ricerca");
   els.searchToggle.dataset.tooltip = state.searchOpen ? "Chiudi ricerca" : "Cerca";
+  renderResults();
+}
+
+function scheduleLiveSearch() {
+  if (!state.searchOpen) {
+    return;
+  }
+
+  window.clearTimeout(liveSearchTimer);
+  const query = els.searchInput.value.trim();
+  if (query.length < 2) {
+    return;
+  }
+
+  liveSearchTimer = window.setTimeout(() => {
+    runSearch(query, { syncInput: false });
+  }, LIVE_SEARCH_DEBOUNCE_MS);
 }
 
 function updateNavCollapse(force = false) {
@@ -1498,6 +1561,9 @@ function renderCredit() {
 
 function setSearchOpen(open, options = {}) {
   state.searchOpen = open;
+  if (!open) {
+    window.clearTimeout(liveSearchTimer);
+  }
   if (open) {
     closeNavDropdowns();
   }

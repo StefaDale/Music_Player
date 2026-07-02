@@ -1243,10 +1243,21 @@ function updateActiveLyric() {
   const currentLine = els.lyricsBox.querySelector(`[data-index="${index}"]`);
   if (currentLine) {
     currentLine.classList.add("active");
-    currentLine.scrollIntoView({ block: "center", behavior: "smooth" });
+    scrollLyricLineIntoPanel(currentLine);
   }
 
   state.lyrics.activeIndex = index;
+}
+
+function scrollLyricLineIntoPanel(lineElement) {
+  const targetTop = lineElement.offsetTop
+    - (els.lyricsBox.clientHeight / 2)
+    + (lineElement.offsetHeight / 2);
+
+  els.lyricsBox.scrollTo({
+    top: Math.max(0, targetTop),
+    behavior: "smooth",
+  });
 }
 
 async function togglePlayback() {

@@ -1,6 +1,8 @@
 const STORAGE_KEY = "open-music-player-state";
 const DEFAULT_QUERY = "top hits italia";
 const PERSONALIZED_PLAYLIST_LIMIT = 3;
+const NAV_COLLAPSE_SCROLL_Y = 220;
+const NAV_RESTORE_SCROLL_DELTA = 12;
 const REQUEST_TIMEOUT_MS = 70000;
 const API_BASE_URL = getApiBaseUrl();
 
@@ -25,6 +27,7 @@ const state = {
   accountsConfigured: false,
   youtubeConfigured: false,
   searchOpen: false,
+  navCollapsed: false,
   activeDropdown: "",
   playlistOverlayOpen: false,
   playlistOverlayId: "",
@@ -50,9 +53,11 @@ let youtubePlayer = null;
 let youtubePlayerReady = false;
 let pendingYouTubeTrack = null;
 let youtubeProgressTimer = null;
+let lastScrollY = window.scrollY || 0;
 
 const els = {
   audio: document.getElementById("audio"),
+  topbar: document.querySelector(".topbar"),
   playlistNavButton: document.getElementById("playlistNavButton"),
   playlistDropdown: document.getElementById("playlistDropdown"),
   accountNavButton: document.getElementById("accountNavButton"),
@@ -183,8 +188,14 @@ function bindEvents() {
     }
   });
 
-  window.addEventListener("scroll", closeTrackMenus, { passive: true });
-  window.addEventListener("resize", closeTrackMenus);
+  window.addEventListener("scroll", () => {
+    closeTrackMenus();
+    updateNavCollapse();
+  }, { passive: true });
+  window.addEventListener("resize", () => {
+    closeTrackMenus();
+    updateNavCollapse(true);
+  });
 
   els.playButton.addEventListener("click", togglePlayback);
   els.prevButton.addEventListener("click", playPreviousTrack);
@@ -405,6 +416,7 @@ function renderAll() {
   renderLyrics();
   renderSearch();
   renderNavDropdowns();
+  updateNavCollapse(true);
   renderCredit();
 }
 
@@ -800,6 +812,26 @@ function renderSearch() {
   els.searchToggle.setAttribute("aria-expanded", String(state.searchOpen));
   els.searchToggle.setAttribute("aria-label", state.searchOpen ? "Chiudi ricerca" : "Apri ricerca");
   els.searchToggle.dataset.tooltip = state.searchOpen ? "Chiudi ricerca" : "Cerca";
+}
+
+function updateNavCollapse(force = false) {
+  const currentScrollY = window.scrollY || 0;
+  const scrolledDown = currentScrollY > lastScrollY;
+  const scrolledUpEnough = lastScrollY - currentScrollY >= NAV_RESTORE_SCROLL_DELTA;
+  let shouldCollapse = state.navCollapsed;
+
+  if (currentScrollY <= NAV_RESTORE_SCROLL_DELTA || scrolledUpEnough) {
+    shouldCollapse = false;
+  } else if (currentScrollY > NAV_COLLAPSE_SCROLL_Y && scrolledDown) {
+    shouldCollapse = true;
+  }
+
+  if (force || shouldCollapse !== state.navCollapsed) {
+    state.navCollapsed = shouldCollapse;
+    document.body.classList.toggle("nav-collapsed", state.navCollapsed);
+  }
+
+  lastScrollY = currentScrollY;
 }
 
 function renderLyrics() {

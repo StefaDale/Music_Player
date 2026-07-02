@@ -30,6 +30,7 @@ const state = {
   searchOpen: false,
   navCollapsed: false,
   restoredTrackNeedsRefresh: false,
+  restoredPlaybackTime: 0,
   activeDropdown: "",
   playlistOverlayOpen: false,
   playlistOverlayId: "",
@@ -233,6 +234,7 @@ function bindEvents() {
   els.audio.addEventListener("timeupdate", () => {
     updateTimeline();
     updateActiveLyric();
+    persistState();
   });
   els.audio.addEventListener("ended", playNextTrack);
   els.audio.addEventListener("error", () => {
@@ -962,10 +964,12 @@ function getLyricsStatusLabel() {
 }
 
 async function playTrack(track) {
+  const resumeTime = state.currentTrack?.id === track.id ? state.restoredPlaybackTime : 0;
   state.restoredTrackNeedsRefresh = false;
+  state.restoredPlaybackTime = 0;
 
   if (track.source === "youtube") {
-    playYouTubeTrack(track);
+    playYouTubeTrack(track, resumeTime);
     return;
   }
 
@@ -984,6 +988,9 @@ async function playTrack(track) {
   loadLyrics(track);
 
   try {
+    if (resumeTime > 0 && Number.isFinite(els.audio.duration)) {
+      els.audio.currentTime = Math.min(resumeTime, Math.max(0, els.audio.duration - 2));
+    }
     await els.audio.play();
   } catch (error) {
     state.isPlaying = false;
@@ -992,7 +999,7 @@ async function playTrack(track) {
   }
 }
 
-function playYouTubeTrack(track) {
+function playYouTubeTrack(track, resumeTime = 0) {
   if (!track.youtubeId) {
     setMessage("Video YouTube non disponibile.");
     return;
@@ -1002,6 +1009,7 @@ function playYouTubeTrack(track) {
   els.audio.removeAttribute("src");
   els.audio.load();
   state.currentTrack = track;
+  state.restoredPlaybackTime = Number(resumeTime) || 0;
   pendingYouTubeTrack = track;
   resetLyrics("loading");
   renderCurrentTrack();
@@ -1081,6 +1089,10 @@ function startYouTubePlayback(track) {
 
   youtubePlayer.loadVideoById(track.youtubeId);
   applyVolume();
+  if (state.restoredPlaybackTime > 0) {
+    youtubePlayer.seekTo(Math.max(0, state.restoredPlaybackTime), true);
+    state.restoredPlaybackTime = 0;
+  }
   youtubePlayer.playVideo();
   startYouTubeTimer();
 }
@@ -1890,6 +1902,7 @@ function seekToPlaybackTime(time) {
   els.currentTime.textContent = formatTime(targetTime);
   updateRangeProgress(els.seekRange);
   updateActiveLyric(targetTime);
+  persistState();
 }
 
 function formatTime(seconds) {
@@ -1906,10 +1919,11 @@ function formatCount(value) {
   }).format(value);
 }
 
-function persistState() {
+function persistState(playbackTime = getPersistablePlaybackTime()) {
   const payload = {
     currentTrack: state.currentTrack,
     queue: state.queue,
+    playbackTime,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
@@ -1919,14 +1933,39 @@ function restoreState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     state.currentTrack = saved.currentTrack || null;
     state.queue = Array.isArray(saved.queue) ? saved.queue : [];
+    state.restoredPlaybackTime = Number(saved.playbackTime || 0);
     state.restoredTrackNeedsRefresh = Boolean(state.currentTrack);
 
     if (state.currentTrack?.stream) {
       els.audio.src = resolveApiUrl(state.currentTrack.stream);
+      if (state.restoredPlaybackTime > 0) {
+        els.audio.addEventListener("loadedmetadata", () => {
+          els.audio.currentTime = Math.min(
+            state.restoredPlaybackTime,
+            Math.max(0, Number(els.audio.duration || 0) - 2),
+          );
+          updateTimeline();
+          updateActiveLyric(state.restoredPlaybackTime);
+        }, { once: true });
+      }
     }
   } catch (error) {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+function getPersistablePlaybackTime() {
+  if (!state.currentTrack) {
+    return 0;
+  }
+
+  const time = getPlaybackTime();
+  const duration = Number(state.currentTrack.duration || 0);
+  if (!Number.isFinite(time) || time < 1) {
+    return 0;
+  }
+
+  return duration > 0 && time > duration - 3 ? 0 : Math.floor(time);
 }
 
 async function refreshRestoredTrackForPlayback(track) {
@@ -1944,7 +1983,7 @@ async function refreshRestoredTrackForPlayback(track) {
     const refreshedTrack = findBestTrackRefresh(track, results) || track;
     state.currentTrack = refreshedTrack;
     state.restoredTrackNeedsRefresh = false;
-    persistState();
+    persistState(state.restoredPlaybackTime);
     renderCurrentTrack();
     return refreshedTrack;
   } catch (error) {

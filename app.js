@@ -758,6 +758,7 @@ function renderAccount() {
 
   els.authStatus.classList.remove("success", "error", "neutral");
   els.authStatus.classList.add(state.authMessageTone || "neutral");
+  els.authStatus.hidden = false;
 
   if (state.authMessage) {
     els.authStatus.textContent = state.authMessage;
@@ -767,7 +768,8 @@ function renderAccount() {
     const usernameLabel = state.user.username ? ` (@${state.user.username})` : "";
     els.authStatus.textContent = `Ciao ${state.user.displayName}${usernameLabel}. Playlist sincronizzate e private.`;
   } else {
-    els.authStatus.textContent = getAuthPromptMessage();
+    els.authStatus.textContent = "";
+    els.authStatus.hidden = true;
   }
 
   const modes = ["login", "register", "forgot", "reset"];

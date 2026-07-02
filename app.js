@@ -23,6 +23,9 @@ const state = {
   playlists: [],
   selectedTrackForPlaylist: null,
   results: [],
+  searchResults: [],
+  searchStatus: "idle",
+  searchError: "",
   isPlaying: false,
   serverAvailable: false,
   accountsConfigured: false,
@@ -51,6 +54,7 @@ const state = {
 };
 
 let activeSearchId = 0;
+let activeOverlaySearchId = 0;
 let activeLyricsId = 0;
 let youtubePlayer = null;
 let youtubePlayerReady = false;
@@ -58,6 +62,9 @@ let pendingYouTubeTrack = null;
 let youtubeProgressTimer = null;
 let lastScrollY = window.scrollY || 0;
 let liveSearchTimer = 0;
+let lyricsAutoScrollPausedUntil = 0;
+let lyricsAutoScrollFrame = 0;
+let lyricsProgrammaticScroll = false;
 
 const els = {
   audio: document.getElementById("audio"),
@@ -157,7 +164,8 @@ function bindEvents() {
 
   els.searchForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    runSearch(els.searchInput.value.trim());
+    const query = els.searchInput.value.trim();
+    runSearch(query, state.searchOpen ? { target: "overlay", syncInput: false } : {});
   });
 
   els.searchInput.addEventListener("keydown", (event) => {
@@ -166,7 +174,7 @@ function bindEvents() {
     }
 
     event.preventDefault();
-    runSearch(els.searchInput.value.trim());
+    runSearch(els.searchInput.value.trim(), state.searchOpen ? { target: "overlay", syncInput: false } : {});
   });
   els.searchInput.addEventListener("input", scheduleLiveSearch);
   els.searchOverlayBackdrop.addEventListener("click", () => setSearchOpen(false, { focusToggle: true }));
@@ -218,6 +226,16 @@ function bindEvents() {
   els.volumeRange.addEventListener("input", () => {
     applyVolume();
   });
+
+  els.lyricsBox.addEventListener("wheel", handleLyricsWheel, { passive: false });
+  els.lyricsBox.addEventListener("pointerdown", () => pauseLyricsAutoScroll(), { passive: true });
+  els.lyricsBox.addEventListener("touchstart", () => pauseLyricsAutoScroll(), { passive: true });
+  els.lyricsBox.addEventListener("keydown", () => pauseLyricsAutoScroll());
+  els.lyricsBox.addEventListener("scroll", () => {
+    if (!lyricsProgrammaticScroll) {
+      pauseLyricsAutoScroll(2200);
+    }
+  }, { passive: true });
 
   els.audio.addEventListener("play", () => {
     state.isPlaying = true;
@@ -301,41 +319,74 @@ async function detectServer() {
 }
 
 async function runSearch(query, options = {}) {
-  if (!query) {
+  const normalizedQuery = String(query || "").trim();
+  const target = options.target === "overlay" ? "overlay" : "main";
+  const overlaySearch = target === "overlay";
+
+  if (!normalizedQuery) {
+    if (overlaySearch) {
+      resetSearchOverlayState();
+    }
     return;
   }
 
   if (!state.serverAvailable) {
-    setMessage(getBackendUnavailableMessage());
+    if (overlaySearch) {
+      state.searchResults = [];
+      state.searchStatus = "error";
+      state.searchError = getBackendUnavailableMessage();
+      renderSearchOverlayResults();
+    } else {
+      setMessage(getBackendUnavailableMessage());
+    }
     return;
   }
 
-  const searchId = ++activeSearchId;
+  const searchId = overlaySearch ? ++activeOverlaySearchId : ++activeSearchId;
   if (options.syncInput !== false) {
-    els.searchInput.value = query;
+    els.searchInput.value = normalizedQuery;
   }
-  state.results = [];
-  renderResults();
-  setMessage("Ricerca in corso...");
-  setResultCount("Caricamento");
+  if (overlaySearch) {
+    state.searchStatus = "loading";
+    state.searchError = "";
+    renderSearchOverlayResults();
+  } else {
+    state.results = [];
+    renderResults();
+    setMessage("Ricerca in corso...");
+    setResultCount("Caricamento");
+  }
   els.searchForm.classList.add("is-loading");
   els.searchForm.setAttribute("aria-busy", "true");
-  els.searchInput.disabled = true;
+  if (!overlaySearch) {
+    els.searchInput.disabled = true;
+  }
 
   try {
-    const data = await fetchJson(`/api/search?q=${encodeURIComponent(query)}&limit=24`);
-    if (searchId !== activeSearchId) {
+    const data = await fetchJson(`/api/search?q=${encodeURIComponent(normalizedQuery)}&limit=24`);
+    if ((overlaySearch && searchId !== activeOverlaySearchId) || (!overlaySearch && searchId !== activeSearchId)) {
       return;
     }
 
-    state.results = Array.isArray(data.results)
+    const results = Array.isArray(data.results)
       ? data.results.filter((track) => track.stream || (track.source === "youtube" && track.youtubeId))
       : [];
+
+    if (overlaySearch) {
+      if (results.length || !state.searchResults.length) {
+        state.searchResults = results;
+      }
+      state.searchStatus = "ready";
+      renderSearchOverlayResults();
+      return;
+    }
+
+    state.results = results;
     renderResults();
 
-    if (state.results.length) {
+    if (results.length) {
       setMessage("Risultati pronti. Scegli un brano o aggiungilo a una playlist.");
-      setResultCount(`${state.results.length} brani`);
+      setResultCount(`${results.length} brani`);
     } else {
       setMessage(state.youtubeConfigured
         ? "Nessun brano riproducibile trovato."
@@ -343,18 +394,26 @@ async function runSearch(query, options = {}) {
       setResultCount("0 brani");
     }
   } catch (error) {
-    if (searchId !== activeSearchId) {
+    if ((overlaySearch && searchId !== activeOverlaySearchId) || (!overlaySearch && searchId !== activeSearchId)) {
       return;
     }
 
     console.error(error);
-    setMessage(getBackendUnavailableMessage(error));
-    setResultCount("Errore");
+    if (overlaySearch) {
+      state.searchStatus = "error";
+      state.searchError = getBackendUnavailableMessage(error);
+      renderSearchOverlayResults();
+    } else {
+      setMessage(getBackendUnavailableMessage(error));
+      setResultCount("Errore");
+    }
   } finally {
-    if (searchId === activeSearchId) {
+    if ((overlaySearch && searchId === activeOverlaySearchId) || (!overlaySearch && searchId === activeSearchId)) {
       els.searchForm.classList.remove("is-loading");
       els.searchForm.setAttribute("aria-busy", "false");
-      els.searchInput.disabled = false;
+      if (!overlaySearch) {
+        els.searchInput.disabled = false;
+      }
     }
   }
 }
@@ -430,21 +489,68 @@ function renderAll() {
 
 function renderResults() {
   els.resultsList.innerHTML = "";
-  els.searchOverlayResults.innerHTML = "";
 
   state.results.forEach((track) => {
     els.resultsList.appendChild(createTrackCard(track));
-    els.searchOverlayResults.appendChild(createSearchResultRow(track));
   });
 
-  if (state.searchOpen && !state.results.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty-note search-overlay-empty";
-    empty.textContent = els.searchForm.classList.contains("is-loading")
-      ? "Cerco brani..."
-      : "Scrivi per cercare brani, artisti o playlist.";
-    els.searchOverlayResults.appendChild(empty);
+  renderSearchOverlayResults();
+}
+
+function renderSearchOverlayResults() {
+  if (!state.searchOpen) {
+    return;
   }
+
+  els.searchOverlayResults.innerHTML = "";
+  const query = els.searchInput.value.trim();
+
+  if (query.length < 2) {
+    renderSearchOverlayEmpty("Inizia una ricerca per vedere i risultati.");
+    return;
+  }
+
+  if (state.searchStatus === "idle") {
+    renderSearchOverlayEmpty("Inizia una ricerca per vedere i risultati.");
+    return;
+  }
+
+  if (state.searchStatus === "loading") {
+    renderSearchOverlayEmpty("Cerco brani...");
+    return;
+  }
+
+  if (state.searchStatus === "error") {
+    renderSearchOverlayEmpty(state.searchError || "Non riesco a completare la ricerca ora.");
+    return;
+  }
+
+  if (!state.searchResults.length) {
+    renderSearchOverlayEmpty("Nessun risultato disponibile per questa ricerca.");
+    return;
+  }
+
+  state.searchResults.forEach((track) => {
+    els.searchOverlayResults.appendChild(createSearchResultRow(track));
+  });
+}
+
+function renderSearchOverlayEmpty(message) {
+  const empty = document.createElement("p");
+  empty.className = "empty-note search-overlay-empty";
+  empty.textContent = message;
+  els.searchOverlayResults.appendChild(empty);
+}
+
+function resetSearchOverlayState() {
+  activeOverlaySearchId += 1;
+  state.searchResults = [];
+  state.searchStatus = "idle";
+  state.searchError = "";
+  els.searchForm.classList.remove("is-loading");
+  els.searchForm.setAttribute("aria-busy", "false");
+  els.searchInput.disabled = false;
+  renderSearchOverlayResults();
 }
 
 function createSearchResultRow(track) {
@@ -870,11 +976,17 @@ function scheduleLiveSearch() {
   window.clearTimeout(liveSearchTimer);
   const query = els.searchInput.value.trim();
   if (query.length < 2) {
+    resetSearchOverlayState();
     return;
   }
 
+  activeOverlaySearchId += 1;
+  state.searchStatus = "loading";
+  state.searchError = "";
+  renderSearchOverlayResults();
+
   liveSearchTimer = window.setTimeout(() => {
-    runSearch(query, { syncInput: false });
+    runSearch(query, { target: "overlay", syncInput: false });
   }, LIVE_SEARCH_DEBOUNCE_MS);
 }
 
@@ -926,7 +1038,7 @@ function renderLyrics() {
       fragment.appendChild(button);
     });
     els.lyricsBox.appendChild(fragment);
-    updateActiveLyric();
+    updateActiveLyric(getPlaybackTime(), { forceScroll: true });
     return;
   }
 
@@ -984,13 +1096,11 @@ async function playTrack(track) {
   resetLyrics("loading");
   renderCurrentTrack();
   renderLyrics();
-  persistState();
+  persistState(resumeTime);
   loadLyrics(track);
+  applyNativeResumeTime(resumeTime);
 
   try {
-    if (resumeTime > 0 && Number.isFinite(els.audio.duration)) {
-      els.audio.currentTime = Math.min(resumeTime, Math.max(0, els.audio.duration - 2));
-    }
     await els.audio.play();
   } catch (error) {
     state.isPlaying = false;
@@ -1014,7 +1124,7 @@ function playYouTubeTrack(track, resumeTime = 0) {
   resetLyrics("loading");
   renderCurrentTrack();
   renderLyrics();
-  persistState();
+  persistState(Number(resumeTime) || 0);
   loadLyrics(track);
   startYouTubePlayback(track);
 }
@@ -1087,12 +1197,15 @@ function startYouTubePlayback(track) {
     return;
   }
 
-  youtubePlayer.loadVideoById(track.youtubeId);
-  applyVolume();
-  if (state.restoredPlaybackTime > 0) {
-    youtubePlayer.seekTo(Math.max(0, state.restoredPlaybackTime), true);
+  const startSeconds = Math.max(0, Number(state.restoredPlaybackTime) || 0);
+  if (startSeconds > 0) {
+    youtubePlayer.loadVideoById({ videoId: track.youtubeId, startSeconds });
+    setPlaybackPositionUi(startSeconds, track.duration);
     state.restoredPlaybackTime = 0;
+  } else {
+    youtubePlayer.loadVideoById(track.youtubeId);
   }
+  applyVolume();
   youtubePlayer.playVideo();
   startYouTubeTimer();
 }
@@ -1154,6 +1267,7 @@ function startYouTubeTimer() {
   youtubeProgressTimer = window.setInterval(() => {
     updateTimeline();
     updateActiveLyric();
+    persistState();
   }, 500);
 }
 
@@ -1232,15 +1346,20 @@ function parseSyncedLyrics(value) {
       const seconds = Number(match[2]);
       const fraction = Number(`0.${(match[3] || "0").padEnd(3, "0")}`);
 
+      const text = match[4].trim();
+      if (!text) {
+        return null;
+      }
+
       return {
         time: minutes * 60 + seconds + fraction,
-        text: match[4],
+        text,
       };
     })
     .filter(Boolean);
 }
 
-function updateActiveLyric(currentTime = getPlaybackTime()) {
+function updateActiveLyric(currentTime = getPlaybackTime(), options = {}) {
   if (!state.lyrics.lines.length) {
     return;
   }
@@ -1266,21 +1385,67 @@ function updateActiveLyric(currentTime = getPlaybackTime()) {
   const currentLine = els.lyricsBox.querySelector(`[data-index="${index}"]`);
   if (currentLine) {
     currentLine.classList.add("active");
-    scrollLyricLineIntoPanel(currentLine);
+    scrollLyricLineIntoPanel(currentLine, options);
   }
 
   state.lyrics.activeIndex = index;
 }
 
-function scrollLyricLineIntoPanel(lineElement) {
-  const targetTop = lineElement.offsetTop
-    - (els.lyricsBox.clientHeight / 2)
-    + (lineElement.offsetHeight / 2);
+function scrollLyricLineIntoPanel(lineElement, options = {}) {
+  if (!options.forceScroll && !canAutoScrollLyrics()) {
+    return;
+  }
 
-  els.lyricsBox.scrollTo({
-    top: Math.max(0, targetTop),
-    behavior: "smooth",
+  const boxRect = els.lyricsBox.getBoundingClientRect();
+  const lineRect = lineElement.getBoundingClientRect();
+  const viewportTop = els.lyricsBox.scrollTop;
+  const viewportHeight = els.lyricsBox.clientHeight;
+  const lineTop = viewportTop + lineRect.top - boxRect.top;
+  const lineBottom = lineTop + lineRect.height;
+  const upperComfort = viewportTop + viewportHeight * 0.16;
+  const lowerComfort = viewportTop + viewportHeight * 0.44;
+
+  if (lineTop >= upperComfort && lineBottom <= lowerComfort) {
+    return;
+  }
+
+  const maxScrollTop = Math.max(0, els.lyricsBox.scrollHeight - viewportHeight);
+  const targetTop = Math.round(Math.min(maxScrollTop, Math.max(0, lineTop - viewportHeight * 0.18)));
+
+  if (Math.abs(targetTop - viewportTop) < 2) {
+    return;
+  }
+
+  window.cancelAnimationFrame(lyricsAutoScrollFrame);
+  lyricsAutoScrollFrame = window.requestAnimationFrame(() => {
+    lyricsProgrammaticScroll = true;
+    els.lyricsBox.scrollTo({
+      top: targetTop,
+      behavior: "auto",
+    });
+
+    window.setTimeout(() => {
+      lyricsProgrammaticScroll = false;
+    }, 80);
   });
+}
+
+function handleLyricsWheel(event) {
+  if (els.lyricsBox.scrollHeight <= els.lyricsBox.clientHeight) {
+    return;
+  }
+
+  pauseLyricsAutoScroll();
+  event.preventDefault();
+  els.lyricsBox.scrollTop += event.deltaY;
+}
+
+function pauseLyricsAutoScroll(duration = 4200) {
+  lyricsAutoScrollPausedUntil = Date.now() + duration;
+}
+
+function canAutoScrollLyrics() {
+  return Date.now() >= lyricsAutoScrollPausedUntil;
 }
 
 async function togglePlayback() {
@@ -1313,17 +1478,22 @@ async function togglePlayback() {
 }
 
 function toggleYouTubePlayback() {
-  if (!youtubePlayer?.getPlayerState) {
-    playYouTubeTrack(state.currentTrack);
+  if (!youtubePlayerReady || !youtubePlayer?.getPlayerState) {
+    pendingYouTubeTrack = state.currentTrack;
+    startYouTubePlayback(state.currentTrack);
     return;
   }
 
   const states = window.YT?.PlayerState || {};
   const playerState = youtubePlayer.getPlayerState();
+  if (playerState === states.UNSTARTED || playerState === states.ENDED) {
+    startYouTubePlayback(state.currentTrack);
+    return;
+  }
+
   const shouldPause = state.isPlaying
     || playerState === states.PLAYING
-    || playerState === states.BUFFERING
-    || playerState === states.CUED;
+    || playerState === states.BUFFERING;
 
   if (shouldPause) {
     youtubePlayer.pauseVideo?.();
@@ -1337,6 +1507,7 @@ function toggleYouTubePlayback() {
   }
 
   youtubePlayer.playVideo?.();
+  startYouTubeTimer();
 }
 
 function playNextTrack() {
@@ -1620,9 +1791,6 @@ function renderCredit() {
 
 function setSearchOpen(open, options = {}) {
   state.searchOpen = open;
-  if (!open) {
-    window.clearTimeout(liveSearchTimer);
-  }
   if (open) {
     closeNavDropdowns();
   }
@@ -1898,10 +2066,8 @@ function seekToPlaybackTime(time) {
     }
   }
 
-  els.seekRange.value = targetTime;
-  els.currentTime.textContent = formatTime(targetTime);
-  updateRangeProgress(els.seekRange);
-  updateActiveLyric(targetTime);
+  setPlaybackPositionUi(targetTime);
+  updateActiveLyric(targetTime, { forceScroll: true });
   persistState();
 }
 
@@ -1928,6 +2094,46 @@ function persistState(playbackTime = getPersistablePlaybackTime()) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
+function setPlaybackPositionUi(time, duration = state.currentTrack?.duration || els.audio.duration) {
+  const safeTime = Math.max(0, Number(time) || 0);
+  const durationValue = Number(duration);
+  const trackDuration = Number(state.currentTrack?.duration || 0);
+  const currentMax = Number(els.seekRange.max || 100);
+  const safeDuration = [durationValue, trackDuration, currentMax]
+    .find((value) => Number.isFinite(value) && value > 0) || 100;
+  els.seekRange.max = safeDuration || 100;
+  els.seekRange.value = Math.min(safeTime, safeDuration);
+  els.currentTime.textContent = formatTime(safeTime);
+  els.durationTime.textContent = formatTime(safeDuration);
+  updateRangeProgress(els.seekRange);
+}
+
+function applyNativeResumeTime(resumeTime) {
+  const targetTime = Number(resumeTime);
+  if (!Number.isFinite(targetTime) || targetTime <= 0) {
+    return;
+  }
+
+  const applyResume = () => {
+    const audioDuration = Number(els.audio.duration);
+    const trackDuration = Number(state.currentTrack?.duration || 0);
+    const duration = Number.isFinite(audioDuration) && audioDuration > 0 ? audioDuration : trackDuration;
+    const boundedTime = duration > 0
+      ? Math.min(targetTime, Math.max(0, duration - 2))
+      : targetTime;
+    els.audio.currentTime = Math.max(0, boundedTime);
+    setPlaybackPositionUi(els.audio.currentTime, duration);
+    updateActiveLyric(els.audio.currentTime, { forceScroll: true });
+  };
+
+  if (Number.isFinite(els.audio.duration) && els.audio.duration > 0) {
+    applyResume();
+    return;
+  }
+
+  els.audio.addEventListener("loadedmetadata", applyResume, { once: true });
+}
+
 function restoreState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -1936,18 +2142,13 @@ function restoreState() {
     state.restoredPlaybackTime = Number(saved.playbackTime || 0);
     state.restoredTrackNeedsRefresh = Boolean(state.currentTrack);
 
+    if (state.currentTrack && state.restoredPlaybackTime > 0) {
+      setPlaybackPositionUi(state.restoredPlaybackTime, state.currentTrack.duration);
+    }
+
     if (state.currentTrack?.stream) {
       els.audio.src = resolveApiUrl(state.currentTrack.stream);
-      if (state.restoredPlaybackTime > 0) {
-        els.audio.addEventListener("loadedmetadata", () => {
-          els.audio.currentTime = Math.min(
-            state.restoredPlaybackTime,
-            Math.max(0, Number(els.audio.duration || 0) - 2),
-          );
-          updateTimeline();
-          updateActiveLyric(state.restoredPlaybackTime);
-        }, { once: true });
-      }
+      applyNativeResumeTime(state.restoredPlaybackTime);
     }
   } catch (error) {
     localStorage.removeItem(STORAGE_KEY);

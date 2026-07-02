@@ -1113,6 +1113,8 @@ function handleYouTubeStateChange(event) {
     startYouTubeTimer();
   } else if (stateCode === YT.PlayerState.PAUSED) {
     state.isPlaying = false;
+  } else if (stateCode === YT.PlayerState.BUFFERING) {
+    state.isPlaying = true;
   } else if (stateCode === YT.PlayerState.ENDED) {
     state.isPlaying = false;
     stopYouTubeTimer();
@@ -1259,17 +1261,7 @@ async function togglePlayback() {
   }
 
   if (state.currentTrack.source === "youtube") {
-    if (!youtubePlayer) {
-      playYouTubeTrack(state.currentTrack);
-      return;
-    }
-
-    const playerState = youtubePlayer?.getPlayerState?.();
-    if (playerState === window.YT?.PlayerState?.PLAYING) {
-      youtubePlayer.pauseVideo();
-    } else {
-      youtubePlayer?.playVideo();
-    }
+    toggleYouTubePlayback();
     return;
   }
 
@@ -1278,6 +1270,33 @@ async function togglePlayback() {
   } else {
     els.audio.pause();
   }
+}
+
+function toggleYouTubePlayback() {
+  if (!youtubePlayer?.getPlayerState) {
+    playYouTubeTrack(state.currentTrack);
+    return;
+  }
+
+  const states = window.YT?.PlayerState || {};
+  const playerState = youtubePlayer.getPlayerState();
+  const shouldPause = state.isPlaying
+    || playerState === states.PLAYING
+    || playerState === states.BUFFERING
+    || playerState === states.CUED;
+
+  if (shouldPause) {
+    youtubePlayer.pauseVideo?.();
+    window.setTimeout(() => {
+      const nextState = youtubePlayer?.getPlayerState?.();
+      if (nextState === states.PLAYING || nextState === states.BUFFERING) {
+        setMessage("YouTube non consente sempre di pausare gli annunci dal controllo dell'app. Usa il player video visibile per mettere in pausa.");
+      }
+    }, 350);
+    return;
+  }
+
+  youtubePlayer.playVideo?.();
 }
 
 function playNextTrack() {

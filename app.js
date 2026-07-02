@@ -29,6 +29,7 @@ const state = {
   youtubeConfigured: false,
   searchOpen: false,
   navCollapsed: false,
+  restoredTrackNeedsRefresh: false,
   activeDropdown: "",
   playlistOverlayOpen: false,
   playlistOverlayId: "",
@@ -961,6 +962,8 @@ function getLyricsStatusLabel() {
 }
 
 async function playTrack(track) {
+  state.restoredTrackNeedsRefresh = false;
+
   if (track.source === "youtube") {
     playYouTubeTrack(track);
     return;
@@ -1276,6 +1279,12 @@ async function togglePlayback() {
 
   if (!state.currentTrack) {
     setMessage("Seleziona un brano dai risultati.");
+    return;
+  }
+
+  if (state.restoredTrackNeedsRefresh) {
+    const refreshedTrack = await refreshRestoredTrackForPlayback(state.currentTrack);
+    await playTrack(refreshedTrack);
     return;
   }
 
@@ -1910,6 +1919,7 @@ function restoreState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     state.currentTrack = saved.currentTrack || null;
     state.queue = Array.isArray(saved.queue) ? saved.queue : [];
+    state.restoredTrackNeedsRefresh = Boolean(state.currentTrack);
 
     if (state.currentTrack?.stream) {
       els.audio.src = resolveApiUrl(state.currentTrack.stream);
@@ -1917,6 +1927,48 @@ function restoreState() {
   } catch (error) {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+async function refreshRestoredTrackForPlayback(track) {
+  if (!state.serverAvailable || !track?.title) {
+    state.restoredTrackNeedsRefresh = false;
+    return track;
+  }
+
+  try {
+    const query = `${track.title} ${track.artist || ""}`.trim();
+    const data = await fetchJson(`/api/search?q=${encodeURIComponent(query)}&limit=8`);
+    const results = Array.isArray(data.results)
+      ? data.results.filter((item) => item.stream || (item.source === "youtube" && item.youtubeId))
+      : [];
+    const refreshedTrack = findBestTrackRefresh(track, results) || track;
+    state.currentTrack = refreshedTrack;
+    state.restoredTrackNeedsRefresh = false;
+    persistState();
+    renderCurrentTrack();
+    return refreshedTrack;
+  } catch (error) {
+    state.restoredTrackNeedsRefresh = false;
+    return track;
+  }
+}
+
+function findBestTrackRefresh(track, results) {
+  const normalizedTitle = normalizeMatchText(track.title);
+  const normalizedArtist = normalizeMatchText(track.artist);
+
+  return results.find((candidate) => candidate.id === track.id)
+    || results.find((candidate) => candidate.youtubeId && candidate.youtubeId === track.youtubeId)
+    || results.find((candidate) => (
+      normalizeMatchText(candidate.title) === normalizedTitle
+      && normalizeMatchText(candidate.artist) === normalizedArtist
+    ))
+    || results[0]
+    || null;
+}
+
+function normalizeMatchText(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function setMessage(message) {
